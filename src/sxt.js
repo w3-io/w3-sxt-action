@@ -369,6 +369,11 @@ export class SxtClient {
       })
     }
 
+    // DDL operations (CREATE, DROP) may return empty body on success
+    if (!text || !text.trim()) {
+      return { success: true }
+    }
+
     try {
       return JSON.parse(text)
     } catch {
