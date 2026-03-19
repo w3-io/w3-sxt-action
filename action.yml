@@ -1,43 +1,77 @@
-# TODO: Replace this entire file with your action's definition.
-#
-# This file is the contract between your action and the workflow runner.
-# It defines what inputs your action accepts and what outputs it produces.
-# Keep inputs minimal and well-named. See the README for naming conventions.
-#
-# Reference: https://docs.github.com/en/actions/creating-actions/metadata-syntax-for-github-actions
-
-name: 'W3 YourPartner Action'          # TODO: e.g. "W3 Cube3 Action"
-description: 'Short description'        # TODO: what does your action do?
+name: 'W3 Space and Time Action'
+description: 'Decentralized SQL queries and blockchain data via Space and Time'
 author: 'w3-io'
 
 inputs:
   command:
-    description: 'Operation to perform'  # TODO: list your commands here
+    description: 'Operation: query, execute, ddl, list-tables, list-chains'
     required: true
-  api-key:
-    description: 'API key for authentication'
-    required: true                       # TODO: set to false if your API needs no auth
-  api-url:
-    description: 'API base URL override (for testing or staging)'
-    required: false
-    default: 'https://api.yourpartner.com'  # TODO: your partner's production API URL
 
-  # TODO: Add your command-specific inputs below. Use plain names without
-  # partner prefix. For example:
-  #
-  # address:
-  #   description: 'Blockchain address to inspect'
-  #   required: false
-  #
-  # symbols:
-  #   description: 'Comma-separated token symbols (e.g. "BTC,ETH")'
-  #   required: false
+  # Authentication — JWT + Biscuit (recommended)
+  # If auth-url and auth-secret are provided, JWT mode is used.
+  # Falls back to API key mode if only api-key is provided.
+  api-url:
+    description: 'SxT API base URL (direct network for JWT, proxy for API key)'
+    required: false
+    default: 'https://api.spaceandtime.dev'
+  auth-url:
+    description: 'JWT token endpoint URL (enables JWT mode)'
+    required: false
+  auth-secret:
+    description: 'Shared secret for JWT token fetch'
+    required: false
+  biscuit-private-key:
+    description: 'Ed25519 private key (hex) for signing biscuit authorization tokens'
+    required: false
+
+  # Authentication — API key (simpler, less reliable)
+  api-key:
+    description: 'SxT Gateway API key (fallback if JWT credentials not provided)'
+    required: false
+
+  # Shared config
+  schema-name:
+    description: 'Default schema for resource scoping (e.g. "ETHEREUM", "myapp")'
+    required: true
+  origin-app:
+    description: 'Application identifier for request tracking'
+    required: false
+    default: 'w3-sxt-action'
+
+  # SQL execution
+  sql:
+    description: 'SQL statement to execute'
+    required: false
+  resources:
+    description: 'Comma-separated table references for performance optimization (e.g. "schema.table1,schema.table2")'
+    required: false
+  query-type:
+    description: 'Query type for DQL: OLTP or OLAP (default: OLTP)'
+    required: false
+    default: 'OLTP'
+
+  # Discovery
+  chain:
+    description: 'Blockchain name for list-chains (e.g. "ethereum")'
+    required: false
+
+  # Retry configuration
+  max-retries:
+    description: 'Maximum retry attempts (default: 3)'
+    required: false
+    default: '3'
+  retry-delay:
+    description: 'Base retry delay in seconds (default: 2)'
+    required: false
+    default: '2'
+  timeout:
+    description: 'Request timeout in seconds (default: 30)'
+    required: false
+    default: '30'
 
 outputs:
   result:
     description: 'JSON result of the operation'
-    # This is the only output. Always a JSON string.
-    # Document the schema in your w3-action.yaml and docs/guide.md.
 
 runs:
   using: 'node20'

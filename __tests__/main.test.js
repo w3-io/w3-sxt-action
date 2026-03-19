@@ -1,24 +1,9 @@
-/**
- * Main integration tests.
- *
- * These test the full action — command routing, input reading, output
- * formatting, and error reporting — with @actions/core mocked.
- *
- * Pattern:
- *   - Mock both fetch and @actions/core
- *   - Use setInputs() to simulate workflow inputs
- *   - Call run() and check getOutputs() / getErrors()
- *   - Test each command, unknown commands, and missing inputs
- *
- * TODO: Update for your commands and inputs.
- */
-
 import { jest } from '@jest/globals'
 import { readFileSync } from 'fs'
 
-const fixtureResponse = JSON.parse(
-  readFileSync(new URL('../__fixtures__/api-response.json', import.meta.url)),
-)
+const authFixture = JSON.parse(readFileSync(new URL('../__fixtures__/auth-response.json', import.meta.url)))
+const queryFixture = JSON.parse(readFileSync(new URL('../__fixtures__/query-response.json', import.meta.url)))
+const dmlFixture = JSON.parse(readFileSync(new URL('../__fixtures__/dml-response.json', import.meta.url)))
 
 const mockFetch = jest.fn()
 global.fetch = mockFetch
@@ -36,70 +21,155 @@ function mockOk(data) {
   })
 }
 
+const JWT_INPUTS = {
+  'auth-url': 'https://auth.example.com/token',
+  'auth-secret': 'test-secret',
+  'biscuit-private-key': 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+  'schema-name': 'testschema',
+}
+
+const APIKEY_INPUTS = {
+  'api-key': 'test-api-key',
+  'schema-name': 'testschema',
+}
+
 describe('run', () => {
   beforeEach(() => {
     mockCore.reset()
     mockFetch.mockReset()
   })
 
-  // TODO: Replace with a test for your first command
-  test('example-command returns result', async () => {
+  test('query command returns rows', async () => {
     mockCore.setInputs({
-      command: 'example-command',
-      'api-key': 'test-key',
-      input: 'test-value',
+      command: 'query',
+      sql: 'SELECT * FROM eth.blocks LIMIT 2',
+      ...JWT_INPUTS,
     })
-    mockOk(fixtureResponse)
+    mockOk(authFixture)
+    mockOk(queryFixture)
 
     await run()
 
-    const outputs = mockCore.getOutputs()
-    expect(outputs.result).toBeDefined()
+    const result = JSON.parse(mockCore.getOutputs().result)
+    expect(result).toHaveLength(2)
+    expect(result[0].BLOCK_NUMBER).toBe(19450000)
     expect(mockCore.getErrors()).toHaveLength(0)
   })
 
-  test('unknown command fails with available commands listed', async () => {
+  test('execute command returns affected rows', async () => {
     mockCore.setInputs({
-      command: 'nonexistent',
-      'api-key': 'test-key',
+      command: 'execute',
+      sql: "INSERT INTO testschema.logs VALUES ('hello')",
+      ...JWT_INPUTS,
     })
+    mockOk(authFixture)
+    mockOk(dmlFixture)
 
     await run()
 
-    const errors = mockCore.getErrors()
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('Unknown command')
-    expect(errors[0]).toContain('nonexistent')
+    const result = JSON.parse(mockCore.getOutputs().result)
+    expect(result[0].UPDATED).toBe(3)
+    expect(mockCore.getErrors()).toHaveLength(0)
   })
 
-  test('missing api-key fails', async () => {
+  test('ddl command works', async () => {
     mockCore.setInputs({
-      command: 'example-command',
-      input: 'test',
+      command: 'ddl',
+      sql: 'CREATE TABLE testschema.mytable (id INT)',
+      ...JWT_INPUTS,
     })
+    mockOk(authFixture)
+    mockOk([])
 
     await run()
 
-    const errors = mockCore.getErrors()
-    expect(errors).toHaveLength(1)
+    expect(mockCore.getErrors()).toHaveLength(0)
   })
 
-  test('API error is reported as failure', async () => {
+  test('list-tables queries information_schema', async () => {
     mockCore.setInputs({
-      command: 'example-command',
-      'api-key': 'test-key',
-      input: 'test',
+      command: 'list-tables',
+      ...JWT_INPUTS,
     })
-    mockFetch.mockResolvedValueOnce({
-      ok: false,
-      status: 500,
-      text: async () => 'Internal Server Error',
+    mockOk(authFixture)
+    mockOk([{ TABLE_NAME: 'blocks' }, { TABLE_NAME: 'transactions' }])
+
+    await run()
+
+    const result = JSON.parse(mockCore.getOutputs().result)
+    expect(result).toHaveLength(2)
+    expect(mockCore.getErrors()).toHaveLength(0)
+  })
+
+  test('list-chains with filter', async () => {
+    mockCore.setInputs({
+      command: 'list-chains',
+      chain: 'ethereum',
+      ...JWT_INPUTS,
+    })
+    mockOk(authFixture)
+    mockOk([{ TABLE_SCHEMA: 'ethereum', TABLE_NAME: 'blocks' }])
+
+    await run()
+
+    expect(mockCore.getErrors()).toHaveLength(0)
+
+    const body = JSON.parse(mockFetch.mock.calls[1][1].body)
+    expect(body.sqlText).toContain('ETHEREUM')
+  })
+
+  test('unknown command fails', async () => {
+    mockCore.setInputs({
+      command: 'bogus',
+      ...JWT_INPUTS,
     })
 
     await run()
 
-    const errors = mockCore.getErrors()
-    expect(errors).toHaveLength(1)
-    expect(errors[0]).toContain('API_ERROR')
+    expect(mockCore.getErrors()).toHaveLength(1)
+    expect(mockCore.getErrors()[0]).toContain('Unknown command')
+  })
+
+  test('missing auth params fails', async () => {
+    mockCore.setInputs({
+      command: 'query',
+      sql: 'SELECT 1',
+    })
+
+    await run()
+
+    expect(mockCore.getErrors()).toHaveLength(1)
+  })
+
+  test('missing sql for query fails', async () => {
+    mockCore.setInputs({
+      command: 'query',
+      ...JWT_INPUTS,
+    })
+    mockOk(authFixture)
+
+    await run()
+
+    expect(mockCore.getErrors()).toHaveLength(1)
+    expect(mockCore.getErrors()[0]).toContain('sql')
+  })
+
+  test('API key mode works without JWT credentials', async () => {
+    mockCore.setInputs({
+      command: 'query',
+      sql: 'SELECT * FROM ETHEREUM.BLOCKS LIMIT 1',
+      ...APIKEY_INPUTS,
+    })
+    mockOk(queryFixture)
+
+    await run()
+
+    const result = JSON.parse(mockCore.getOutputs().result)
+    expect(result).toHaveLength(2)
+    expect(mockCore.getErrors()).toHaveLength(0)
+
+    // Should use apikey header, not Bearer
+    const headers = mockFetch.mock.calls[0][1].headers
+    expect(headers.apikey).toBe('test-api-key')
   })
 })

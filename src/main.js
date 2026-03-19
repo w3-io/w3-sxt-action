@@ -1,30 +1,12 @@
-/**
- * Command router and output formatter.
- *
- * This file wires your client to the GitHub Actions runtime. It:
- *   1. Reads the `command` input to determine which operation to run
- *   2. Creates your client with the provided credentials
- *   3. Calls the appropriate handler function
- *   4. Sets the `result` output as a JSON string
- *   5. Writes a job summary for visibility in the Actions UI
- *   6. Reports errors cleanly via core.setFailed()
- *
- * To add a new command:
- *   1. Write a handler function (async, takes client, returns result)
- *   2. Add it to the COMMANDS map
- *   3. Add summary rendering in writeSummary() if appropriate
- */
-
 import * as core from '@actions/core'
-// TODO: Update this import to match your renamed client
-import { Client, ClientError } from './client.js'
+import { SxtClient, SxtError } from './sxt.js'
 
-// TODO: Replace with your commands. Each key is a command name that users
-// pass via the `command` input. Each value is an async function that takes
-// the client and returns a result object.
 const COMMANDS = {
-  'example-command': runExampleCommand,
-  // 'another-command': runAnotherCommand,
+  query: runQuery,
+  execute: runExecute,
+  ddl: runDdl,
+  'list-tables': runListTables,
+  'list-chains': runListChains,
 }
 
 export async function run() {
@@ -37,48 +19,96 @@ export async function run() {
       return
     }
 
-    // TODO: Update constructor args to match your client.
-    // Remove apiKey if your API doesn't need auth.
-    const client = new Client({
-      apiKey: core.getInput('api-key', { required: true }),
-      baseUrl: core.getInput('api-url') || undefined,
+    const client = new SxtClient({
+      apiUrl: core.getInput('api-url') || undefined,
+      apiKey: core.getInput('api-key') || undefined,
+      authUrl: core.getInput('auth-url') || undefined,
+      authSecret: core.getInput('auth-secret') || undefined,
+      biscuitPrivateKey: core.getInput('biscuit-private-key') || undefined,
+      schemaName: core.getInput('schema-name', { required: true }),
+      originApp: core.getInput('origin-app') || undefined,
+      maxRetries: core.getInput('max-retries') ? Number(core.getInput('max-retries')) : undefined,
+      retryDelay: core.getInput('retry-delay') ? Number(core.getInput('retry-delay')) : undefined,
+      timeout: core.getInput('timeout') ? Number(core.getInput('timeout')) : undefined,
     })
+
+    if (client.authMode === 'apikey') {
+      core.warning(
+        'Using API key auth (Gateway Proxy). For production, use JWT + biscuit auth ' +
+          'by providing auth-url, auth-secret, and biscuit-private-key.',
+      )
+    }
 
     const result = await handler(client)
     core.setOutput('result', JSON.stringify(result))
 
     writeSummary(command, result)
   } catch (error) {
-    // TODO: Update error class name to match yours
-    if (error instanceof ClientError) {
-      core.setFailed(`${error.name} (${error.code}): ${error.message}`)
+    if (error instanceof SxtError) {
+      core.setFailed(`SxT error (${error.code}): ${error.message}`)
     } else {
       core.setFailed(error.message)
     }
   }
 }
 
-// -- Command handlers -------------------------------------------------------
-// Each handler reads its own inputs, calls the client, returns a result.
-// Keep these thin — business logic belongs in the client.
-
-async function runExampleCommand(client) {
-  // TODO: Read your command-specific inputs here
-  const input = core.getInput('input', { required: true })
-
-  return client.exampleCommand(input)
+function parseList(input) {
+  if (!input) return undefined
+  return input
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
 }
 
-// -- Job summary ------------------------------------------------------------
-// Optional but recommended. Renders a visible summary in the Actions UI.
-// See https://github.blog/news-insights/product-news/supercharging-github-actions-with-job-summaries/
+async function runQuery(client) {
+  const sql = core.getInput('sql', { required: true })
+  const resources = parseList(core.getInput('resources'))
+  const queryType = core.getInput('query-type') || undefined
+
+  return client.query(sql, { resources, queryType })
+}
+
+async function runExecute(client) {
+  const sql = core.getInput('sql', { required: true })
+  const resources = parseList(core.getInput('resources'))
+
+  return client.execute(sql, { resources })
+}
+
+async function runDdl(client) {
+  const sql = core.getInput('sql', { required: true })
+  return client.ddl(sql)
+}
+
+async function runListTables(client) {
+  return client.listTables()
+}
+
+async function runListChains(client) {
+  const chain = core.getInput('chain') || undefined
+  return client.listChains(chain)
+}
 
 function writeSummary(command, result) {
-  // TODO: Customize the summary for your action. A table of key results
-  // works well. Delete this function if your action doesn't need a summary.
+  const heading = `Space and Time: ${command}`
+
+  if (Array.isArray(result) && result.length > 0) {
+    const columns = Object.keys(result[0])
+    const headerRow = columns.map((c) => ({ data: c, header: true }))
+    const dataRows = result.slice(0, 20).map((row) => columns.map((c) => String(row[c] ?? '')))
+
+    core.summary.addHeading(heading, 3)
+
+    if (result.length > 20) {
+      core.summary.addRaw(`Showing 20 of ${result.length} rows\n\n`)
+    }
+
+    core.summary.addTable([headerRow, ...dataRows]).write()
+    return
+  }
+
   core.summary
-    .addHeading('Action Result', 3)
-    .addRaw(`**Command:** \`${command}\`\n\n`)
+    .addHeading(heading, 3)
     .addCodeBlock(JSON.stringify(result, null, 2), 'json')
     .write()
 }
