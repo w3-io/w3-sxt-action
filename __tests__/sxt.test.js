@@ -45,29 +45,19 @@ describe('SxtClient', () => {
     expect(() => new SxtClient({ schemaName: 'test' })).toThrow('Authentication required')
   })
 
-  test('constructor accepts JWT auth', () => {
+  test('constructor accepts explicit JWT auth', () => {
     const client = new SxtClient(DEFAULT_CONFIG)
-    expect(client.authMode).toBe('jwt')
+    expect(client.authMode).toBe('jwt-explicit')
   })
 
-  test('constructor accepts API key auth', () => {
+  test('constructor accepts API key (bootstraps JWT)', () => {
     const client = new SxtClient({ apiKey: 'test-key', schemaName: 'test' })
-    expect(client.authMode).toBe('apikey')
+    expect(client.authMode).toBe('jwt-apikey')
   })
 
-  test('JWT mode takes precedence over API key', () => {
+  test('explicit JWT takes precedence over API key bootstrap', () => {
     const client = new SxtClient({ ...DEFAULT_CONFIG, apiKey: 'test-key' })
-    expect(client.authMode).toBe('jwt')
-  })
-
-  test('API key mode uses proxy URL by default', () => {
-    const client = new SxtClient({ apiKey: 'test-key', schemaName: 'test' })
-    expect(client.apiUrl).toContain('proxy')
-  })
-
-  test('JWT mode uses direct URL by default', () => {
-    const client = new SxtClient(DEFAULT_CONFIG)
-    expect(client.apiUrl).not.toContain('proxy')
+    expect(client.authMode).toBe('jwt-explicit')
   })
 
   describe('token management', () => {
@@ -130,7 +120,7 @@ describe('SxtClient', () => {
       expect(result).toEqual(queryFixture)
 
       const [sqlUrl, sqlOpts] = mockFetch.mock.calls[1]
-      expect(sqlUrl).toContain('/v1/sql/dql')
+      expect(sqlUrl).toContain('/v1/sql')
       expect(sqlOpts.headers.Authorization).toContain('Bearer ')
 
       const body = JSON.parse(sqlOpts.body)
@@ -167,7 +157,7 @@ describe('SxtClient', () => {
       const result = await client.execute("INSERT INTO testschema.logs VALUES ('hello')")
 
       expect(result).toEqual(dmlFixture)
-      expect(mockFetch.mock.calls[1][0]).toContain('/v1/sql/dml')
+      expect(mockFetch.mock.calls[1][0]).toContain('/v1/sql')
     })
   })
 
@@ -179,7 +169,7 @@ describe('SxtClient', () => {
 
       await client.ddl('CREATE TABLE testschema.mytable (id INT)')
 
-      expect(mockFetch.mock.calls[1][0]).toContain('/v1/sql/ddl')
+      expect(mockFetch.mock.calls[1][0]).toContain('/v1/sql')
     })
   })
 
@@ -262,39 +252,40 @@ describe('SxtClient', () => {
     })
   })
 
-  describe('API key mode', () => {
+  describe('API key JWT bootstrap mode', () => {
     const apiKeyConfig = { apiKey: 'test-api-key', schemaName: 'testschema' }
 
-    test('sends apikey header instead of Bearer', async () => {
+    test('bootstraps JWT from API key via /auth/apikey', async () => {
       const client = new SxtClient(apiKeyConfig)
+      // Auth bootstrap call
+      mockOk({ accessToken: 'jwt-from-apikey', accessTokenExpires: Date.now() + 1800000 })
+      // SQL call
       mockOk(queryFixture)
 
       await client.query('SELECT * FROM ETHEREUM.BLOCKS LIMIT 1')
 
-      const [url, opts] = mockFetch.mock.calls[0]
-      expect(url).toContain('proxy')
-      expect(opts.headers.apikey).toBe('test-api-key')
-      expect(opts.headers.Authorization).toBeUndefined()
+      // First call is POST /auth/apikey
+      const [authUrl, authOpts] = mockFetch.mock.calls[0]
+      expect(authUrl).toContain('/auth/apikey')
+      expect(authOpts.headers.apikey).toBe('test-api-key')
+
+      // Second call includes both apikey and Bearer
+      const sqlOpts = mockFetch.mock.calls[1][1]
+      expect(sqlOpts.headers.apikey).toBe('test-api-key')
+      expect(sqlOpts.headers.Authorization).toBe('Bearer jwt-from-apikey')
     })
 
-    test('uses /v1/sql for all operations (no typed endpoints)', async () => {
+    test('caches JWT from API key bootstrap', async () => {
       const client = new SxtClient(apiKeyConfig)
+      mockOk({ accessToken: 'jwt-cached', accessTokenExpires: Date.now() + 1800000 })
+      mockOk(queryFixture)
       mockOk(queryFixture)
 
       await client.query('SELECT 1')
+      await client.query('SELECT 2')
 
-      expect(mockFetch.mock.calls[0][0]).toContain('/v1/sql')
-      expect(mockFetch.mock.calls[0][0]).not.toContain('/v1/sql/dql')
-    })
-
-    test('does not fetch JWT token', async () => {
-      const client = new SxtClient(apiKeyConfig)
-      mockOk(queryFixture)
-
-      await client.query('SELECT 1')
-
-      // Only one fetch call (the SQL query), no auth call
-      expect(mockFetch).toHaveBeenCalledTimes(1)
+      // 3 calls: 1 auth bootstrap + 2 SQL queries
+      expect(mockFetch).toHaveBeenCalledTimes(3)
     })
   })
 

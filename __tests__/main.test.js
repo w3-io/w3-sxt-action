@@ -154,12 +154,15 @@ describe('run', () => {
     expect(mockCore.getErrors()[0]).toContain('sql')
   })
 
-  test('API key mode works without JWT credentials', async () => {
+  test('API key mode bootstraps JWT then queries', async () => {
     mockCore.setInputs({
       command: 'query',
       sql: 'SELECT * FROM ETHEREUM.BLOCKS LIMIT 1',
       ...APIKEY_INPUTS,
     })
+    // JWT bootstrap from API key
+    mockOk({ accessToken: 'jwt-from-apikey', accessTokenExpires: Date.now() + 1800000 })
+    // SQL query
     mockOk(queryFixture)
 
     await run()
@@ -168,8 +171,9 @@ describe('run', () => {
     expect(result).toHaveLength(2)
     expect(mockCore.getErrors()).toHaveLength(0)
 
-    // Should use apikey header, not Bearer
-    const headers = mockFetch.mock.calls[0][1].headers
-    expect(headers.apikey).toBe('test-api-key')
+    // SQL call should have both apikey and Bearer
+    const sqlHeaders = mockFetch.mock.calls[1][1].headers
+    expect(sqlHeaders.apikey).toBe('test-api-key')
+    expect(sqlHeaders.Authorization).toBe('Bearer jwt-from-apikey')
   })
 })

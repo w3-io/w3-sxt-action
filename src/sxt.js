@@ -20,8 +20,8 @@
 
 import { createSign } from 'crypto'
 
-const DEFAULT_JWT_URL = 'https://api.spaceandtime.dev'
-const DEFAULT_PROXY_URL = 'https://proxy.api.spaceandtime.dev'
+const DEFAULT_JWT_URL = 'https://proxy.api.makeinfinite.dev'
+const DEFAULT_PROXY_URL = 'https://proxy.api.makeinfinite.dev'
 
 export class SxtError extends Error {
   constructor(message, { status, body, code } = {}) {
@@ -49,30 +49,25 @@ export class SxtClient {
     if (!schemaName) throw new SxtError('schema-name is required', { code: 'MISSING_SCHEMA' })
 
     // Determine auth mode
-    this.jwtMode = Boolean(authUrl && authSecret)
-    this.apiKeyMode = Boolean(apiKey) && !this.jwtMode
+    // JWT mode: either explicit auth-url + auth-secret, or api-key with JWT bootstrap
+    this.jwtMode = Boolean(authUrl && authSecret) || Boolean(apiKey)
+    this.hasExplicitAuth = Boolean(authUrl && authSecret)
 
-    if (!this.jwtMode && !this.apiKeyMode) {
+    if (!apiKey && !this.hasExplicitAuth) {
       throw new SxtError(
-        'Authentication required: provide auth-url + auth-secret (recommended) or api-key (fallback)',
+        'Authentication required: provide api-key (recommended) or auth-url + auth-secret',
         { code: 'MISSING_AUTH' },
       )
     }
 
-    // JWT mode config
+    // Auth config
+    this.apiKey = apiKey
     this.authUrl = authUrl
     this.authSecret = authSecret
     this.biscuitPrivateKey = biscuitPrivateKey
 
-    // API key mode config
-    this.apiKey = apiKey
-
-    // Set API URL based on mode
-    if (apiUrl) {
-      this.apiUrl = apiUrl.replace(/\/+$/, '')
-    } else {
-      this.apiUrl = this.jwtMode ? DEFAULT_JWT_URL : DEFAULT_PROXY_URL
-    }
+    // API URL
+    this.apiUrl = apiUrl ? apiUrl.replace(/\/+$/, '') : DEFAULT_PROXY_URL
 
     this.schemaName = schemaName
     this.originApp = originApp
@@ -88,7 +83,9 @@ export class SxtClient {
    * Returns which auth mode is active.
    */
   get authMode() {
-    return this.jwtMode ? 'jwt' : 'apikey'
+    if (this.hasExplicitAuth) return 'jwt-explicit'
+    if (this.apiKey) return 'jwt-apikey'
+    return 'none'
   }
 
   // ---------------------------------------------------------------------------
@@ -106,8 +103,7 @@ export class SxtClient {
    */
   async query(sql, { resources, queryType = 'OLTP' } = {}) {
     if (!sql) throw new SxtError('sql is required', { code: 'MISSING_SQL' })
-    const endpoint = this.jwtMode ? '/v1/sql/dql' : '/v1/sql'
-    return this.executeSql(sql, { resources, queryType, endpoint })
+    return this.executeSql(sql, { resources, queryType })
   }
 
   /**
@@ -120,8 +116,7 @@ export class SxtClient {
    */
   async execute(sql, { resources } = {}) {
     if (!sql) throw new SxtError('sql is required', { code: 'MISSING_SQL' })
-    const endpoint = this.jwtMode ? '/v1/sql/dml' : '/v1/sql'
-    return this.executeSql(sql, { resources, endpoint })
+    return this.executeSql(sql, { resources })
   }
 
   /**
@@ -132,54 +127,54 @@ export class SxtClient {
    */
   async ddl(sql) {
     if (!sql) throw new SxtError('sql is required', { code: 'MISSING_SQL' })
-    const endpoint = this.jwtMode ? '/v1/sql/ddl' : '/v1/sql'
-    return this.executeSql(sql, { endpoint })
+    return this.executeSql(sql)
   }
 
   /**
-   * List tables in the configured schema.
+   * List tables in the configured schema by querying system metadata.
    *
    * @returns {Array} Table metadata
    */
   async listTables() {
-    const sql = `SELECT TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA = '${this.schemaName}'`
-    const endpoint = this.jwtMode ? '/v1/sql/dql' : '/v1/sql'
-    return this.executeSql(sql, { endpoint })
+    const sql = `SHOW TABLES IN ${this.schemaName}`
+    return this.executeSql(sql)
   }
 
   /**
-   * List available indexed blockchain data.
+   * Verify connectivity and return a sample from a known indexed chain.
    *
-   * @param {string} [chain] - Filter by chain name
-   * @returns {Array} Available blockchain tables
+   * @param {string} [chain="ETHEREUM"] - Chain schema name
+   * @returns {Array} Latest blocks from the specified chain
    */
   async listChains(chain) {
-    const filter = chain ? chain.toUpperCase() : 'ETHEREUM'
-    const sql = `SELECT TABLE_SCHEMA, TABLE_NAME FROM INFORMATION_SCHEMA.TABLES WHERE TABLE_SCHEMA LIKE '%${filter}%' ORDER BY TABLE_SCHEMA, TABLE_NAME`
-    const endpoint = this.jwtMode ? '/v1/sql/dql' : '/v1/sql'
-    return this.executeSql(sql, { endpoint })
+    const schema = chain ? chain.toUpperCase() : 'ETHEREUM'
+    const sql = `SELECT BLOCK_NUMBER, TIME_STAMP FROM ${schema}.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 5`
+    return this.executeSql(sql)
   }
 
   // ---------------------------------------------------------------------------
   // SQL execution with auth + biscuit + retry
   // ---------------------------------------------------------------------------
 
-  async executeSql(sql, { resources, queryType, endpoint = '/v1/sql' } = {}) {
+  async executeSql(sql, { resources, queryType } = {}) {
+    const endpoint = '/v1/sql'
     const biscuit = this.biscuitPrivateKey ? this.generateBiscuit(sql) : null
+    const token = await this.getToken()
 
     const body = {
       sqlText: sql,
       ...(biscuit && { biscuits: [biscuit] }),
       ...(resources?.length && { resources }),
-      ...(queryType && this.jwtMode && { queryType }),
+      ...(queryType && { queryType }),
     }
 
-    if (this.jwtMode) {
-      const token = await this.getToken()
-      return this.requestWithRetry('POST', endpoint, body, { bearer: token })
-    } else {
-      return this.requestWithRetry('POST', endpoint, body, { apiKey: this.apiKey })
-    }
+    // Always include API key when available (proxy requires it),
+    // plus Bearer token for JWT-authenticated requests
+    const auth = {}
+    if (this.apiKey) auth.apiKey = this.apiKey
+    if (token) auth.bearer = token
+
+    return this.requestWithRetry('POST', endpoint, body, auth)
   }
 
   // ---------------------------------------------------------------------------
@@ -191,14 +186,31 @@ export class SxtClient {
       return this.cachedToken
     }
 
-    const response = await fetch(this.authUrl, {
-      method: 'GET',
-      headers: {
-        'x-shared-secret': this.authSecret,
-        Accept: 'application/json',
-      },
-      signal: AbortSignal.timeout(this.timeout),
-    })
+    let response
+
+    if (this.hasExplicitAuth) {
+      // JWT via explicit auth URL + shared secret
+      response = await fetch(this.authUrl, {
+        method: 'GET',
+        headers: {
+          'x-shared-secret': this.authSecret,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(this.timeout),
+      })
+    } else if (this.apiKey) {
+      // JWT bootstrapped from API key
+      response = await fetch(`${this.apiUrl}/auth/apikey`, {
+        method: 'POST',
+        headers: {
+          apikey: this.apiKey,
+          Accept: 'application/json',
+        },
+        signal: AbortSignal.timeout(this.timeout),
+      })
+    } else {
+      return null
+    }
 
     const text = await response.text()
 
@@ -222,9 +234,13 @@ export class SxtClient {
       throw new SxtError('No token in auth response', { body: text, code: 'AUTH_NO_TOKEN' })
     }
 
+    // Cache with margin before expiry
     this.cachedToken = token
-    // Cache for 20 minutes (tokens expire at 25 min, leave margin)
-    this.tokenExpiresAt = Date.now() + 20 * 60 * 1000
+    if (data.accessTokenExpires) {
+      this.tokenExpiresAt = data.accessTokenExpires - 60 * 1000 // 1 min margin
+    } else {
+      this.tokenExpiresAt = Date.now() + 20 * 60 * 1000 // 20 min default
+    }
     return token
   }
 
@@ -332,10 +348,11 @@ export class SxtClient {
       originApp: this.originApp,
     }
 
+    if (auth.apiKey) {
+      headers.apikey = auth.apiKey
+    }
     if (auth.bearer) {
       headers.Authorization = `Bearer ${auth.bearer}`
-    } else if (auth.apiKey) {
-      headers.apikey = auth.apiKey
     }
 
     const options = { method, headers, signal: AbortSignal.timeout(this.timeout) }
