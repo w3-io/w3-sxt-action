@@ -196,6 +196,37 @@ ZK-proven queries.
       LIMIT 10
 ```
 
+## Security
+
+**SQL injection.** User-controlled values must not be interpolated
+directly into SQL strings. Use parameterized values or validate inputs
+before constructing SQL.
+
+Avoid patterns like this:
+
+```yaml
+# DANGEROUS — user input goes straight into SQL
+sql: "SELECT * FROM EVENTS WHERE id = '${{ github.event.inputs.id }}'"
+```
+
+Instead, validate or sanitize inputs in a prior step:
+
+```yaml
+- name: Validate input
+  run: |
+    if ! [[ "${{ github.event.inputs.id }}" =~ ^[0-9]+$ ]]; then
+      echo "Invalid input" && exit 1
+    fi
+
+- name: Query with validated input
+  uses: w3-io/w3-sxt-action@v0
+  with:
+    command: query
+    api-key: ${{ secrets.SXT_API_KEY }}
+    schema-name: MY_APP
+    sql: "SELECT * FROM MY_APP.EVENTS WHERE id = ${{ github.event.inputs.id }}"
+```
+
 ## Retry behavior
 
 The action retries automatically on:

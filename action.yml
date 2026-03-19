@@ -38,7 +38,7 @@ inputs:
 
   # SQL execution
   sql:
-    description: 'SQL statement to execute'
+    description: 'SQL statement to execute. WARNING: User-controlled values must not be interpolated directly into SQL strings. Use parameterized values or validate inputs before constructing SQL.'
     required: false
   resources:
     description: 'Comma-separated table references for performance optimization (e.g. "schema.table1,schema.table2")'

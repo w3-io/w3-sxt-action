@@ -18,7 +18,6 @@
  * Designed for reuse — import this module directly if building a custom action.
  */
 
-const DEFAULT_JWT_URL = 'https://proxy.api.makeinfinite.dev'
 const DEFAULT_PROXY_URL = 'https://proxy.api.makeinfinite.dev'
 
 export class SxtError extends Error {
