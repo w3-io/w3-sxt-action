@@ -1,44 +1,80 @@
-# TODO: This file describes your action for the W3 MCP server.
-# AI agents use this to discover your action, understand its commands,
-# and generate correct workflow YAML. Keep it in sync with action.yml.
-#
-# On release, this file is synced to the MCP's registry.yaml.
-
-kind: integration              # integration | primitive | utility
-partner: yourpartner           # TODO: machine-readable partner ID
-name: YourPartner Integration  # TODO: human-readable name
+kind: integration
+partner: sxt
+name: Space and Time
 version: 1.0.0
-repo: w3-io/w3-yourpartner-action  # TODO: your repo
-
+repo: w3-io/w3-sxt-action
 commands:
-  # TODO: Define each command your action supports. Example:
-  #
-  # - name: inspect
-  #   description: >
-  #     Risk assessment for a blockchain address. Returns per-chain
-  #     scores for fraud, compliance, and cyber risk.
-  #   inputs:
-  #     address:
-  #       type: string
-  #       required: true
-  #       description: Blockchain address to inspect
-  #     chain-id:
-  #       type: string
-  #       required: false
-  #       description: Filter to a specific chain
-  #   outputs:
-  #     result:
-  #       type: object
-  #       description: Full risk score breakdown
-
-  - name: example-command
-    description: TODO - describe what this command does
+  - name: query
+    description: >
+      Execute a SELECT query. Returns result rows as JSON. Supports
+      indexed blockchain data (Ethereum, Bitcoin, Base) and custom tables.
     inputs:
-      input:
+      sql:
         type: string
         required: true
-        description: TODO - describe this input
+        description: SQL SELECT statement
+      resources:
+        type: string
+        required: false
+        description: Comma-separated table references for performance optimization
+      query-type:
+        type: string
+        required: false
+        description: "OLTP or OLAP (default: OLTP)"
+    outputs:
+      result:
+        type: array
+        description: Array of result row objects
+
+  - name: execute
+    description: >
+      Execute DML (INSERT, UPDATE, DELETE). Returns affected row count.
+    inputs:
+      sql:
+        type: string
+        required: true
+        description: SQL DML statement
+      resources:
+        type: string
+        required: false
+        description: Comma-separated table references
+    outputs:
+      result:
+        type: array
+        description: "[{UPDATED: <count>}]"
+
+  - name: ddl
+    description: >
+      Execute DDL (CREATE TABLE, DROP TABLE, ALTER). Manages schema
+      and table lifecycle.
+    inputs:
+      sql:
+        type: string
+        required: true
+        description: SQL DDL statement
     outputs:
       result:
         type: object
-        description: TODO - describe the output shape
+        description: "{success: true}"
+
+  - name: list-tables
+    description: List tables in the configured schema.
+    inputs: {}
+    outputs:
+      result:
+        type: array
+        description: Table metadata
+
+  - name: list-chains
+    description: >
+      Query latest blocks from an indexed blockchain. Verifies
+      connectivity and data availability.
+    inputs:
+      chain:
+        type: string
+        required: false
+        description: "Chain name (default: ETHEREUM). Also supports BITCOIN, BASE."
+    outputs:
+      result:
+        type: array
+        description: Latest blocks from the specified chain
