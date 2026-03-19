@@ -24,7 +24,7 @@ function mockOk(data) {
 const JWT_INPUTS = {
   'auth-url': 'https://auth.example.com/token',
   'auth-secret': 'test-secret',
-  'biscuit-private-key': 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+  'biscuit': 'test-biscuit-token',
   'schema-name': 'testschema',
 }
 

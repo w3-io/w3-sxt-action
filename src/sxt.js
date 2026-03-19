@@ -18,8 +18,6 @@
  * Designed for reuse — import this module directly if building a custom action.
  */
 
-import { createSign } from 'crypto'
-
 const DEFAULT_JWT_URL = 'https://proxy.api.makeinfinite.dev'
 const DEFAULT_PROXY_URL = 'https://proxy.api.makeinfinite.dev'
 
@@ -39,7 +37,7 @@ export class SxtClient {
     apiKey,
     authUrl,
     authSecret,
-    biscuitPrivateKey,
+    biscuit,
     schemaName,
     originApp = 'w3-sxt-action',
     maxRetries = 3,
@@ -49,8 +47,6 @@ export class SxtClient {
     if (!schemaName) throw new SxtError('schema-name is required', { code: 'MISSING_SCHEMA' })
 
     // Determine auth mode
-    // JWT mode: either explicit auth-url + auth-secret, or api-key with JWT bootstrap
-    this.jwtMode = Boolean(authUrl && authSecret) || Boolean(apiKey)
     this.hasExplicitAuth = Boolean(authUrl && authSecret)
 
     if (!apiKey && !this.hasExplicitAuth) {
@@ -64,7 +60,7 @@ export class SxtClient {
     this.apiKey = apiKey
     this.authUrl = authUrl
     this.authSecret = authSecret
-    this.biscuitPrivateKey = biscuitPrivateKey
+    this.biscuit = biscuit || null
 
     // API URL
     this.apiUrl = apiUrl ? apiUrl.replace(/\/+$/, '') : DEFAULT_PROXY_URL
@@ -158,12 +154,11 @@ export class SxtClient {
 
   async executeSql(sql, { resources, queryType } = {}) {
     const endpoint = '/v1/sql'
-    const biscuit = this.biscuitPrivateKey ? this.generateBiscuit(sql) : null
     const token = await this.getToken()
 
     const body = {
       sqlText: sql,
-      ...(biscuit && { biscuits: [biscuit] }),
+      ...(this.biscuit && { biscuits: [this.biscuit] }),
       ...(resources?.length && { resources }),
       ...(queryType && { queryType }),
     }
@@ -249,43 +244,6 @@ export class SxtClient {
     this.tokenExpiresAt = 0
   }
 
-  // ---------------------------------------------------------------------------
-  // Biscuit generation
-  // ---------------------------------------------------------------------------
-
-  /**
-   * Generate a biscuit authorization token for a SQL statement.
-   * Scoped to the operation type and table reference.
-   * Returns null on failure (best-effort).
-   */
-  generateBiscuit(sql) {
-    try {
-      const operation = this.detectOperation(sql)
-      const resource = this.extractResource(sql)
-
-      const payload = {
-        operation,
-        resource: resource.toLowerCase(),
-        timestamp: Math.floor(Date.now() / 1000),
-      }
-
-      const payloadStr = JSON.stringify(payload)
-      const keyBuffer = Buffer.from(this.biscuitPrivateKey, 'hex')
-
-      const sign = createSign('Ed25519')
-      sign.update(payloadStr)
-      const signature = sign.sign({ key: keyBuffer, format: 'der', type: 'pkcs8' })
-
-      const biscuitData = {
-        payload: Buffer.from(payloadStr).toString('base64'),
-        signature: signature.toString('base64'),
-      }
-      return Buffer.from(JSON.stringify(biscuitData)).toString('base64')
-    } catch {
-      return null
-    }
-  }
-
   detectOperation(sql) {
     const trimmed = sql.trim().toUpperCase()
     if (trimmed.startsWith('SELECT')) return 'dql_select'
@@ -317,7 +275,7 @@ export class SxtClient {
       } catch (error) {
         lastError = error
 
-        if (error.status === 401 && this.jwtMode && attempt < this.maxRetries) {
+        if (error.status === 401 && attempt < this.maxRetries) {
           this.invalidateToken()
           auth = { bearer: await this.getToken() }
           continue

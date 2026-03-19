@@ -24,7 +24,7 @@ export async function run() {
       apiKey: core.getInput('api-key') || undefined,
       authUrl: core.getInput('auth-url') || undefined,
       authSecret: core.getInput('auth-secret') || undefined,
-      biscuitPrivateKey: core.getInput('biscuit-private-key') || undefined,
+      biscuit: core.getInput('biscuit') || undefined,
       schemaName: core.getInput('schema-name', { required: true }),
       originApp: core.getInput('origin-app') || undefined,
       maxRetries: core.getInput('max-retries') ? Number(core.getInput('max-retries')) : undefined,

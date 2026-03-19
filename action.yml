@@ -13,20 +13,18 @@ inputs:
   api-url:
     description: 'SxT API base URL (direct network for JWT, proxy for API key)'
     required: false
-    default: 'https://api.spaceandtime.dev'
+    default: 'https://proxy.api.makeinfinite.dev'
+  api-key:
+    description: 'SxT API key (bootstraps JWT session automatically)'
+    required: false
   auth-url:
-    description: 'JWT token endpoint URL (enables JWT mode)'
+    description: 'Custom JWT token endpoint URL (alternative to API key)'
     required: false
   auth-secret:
-    description: 'Shared secret for JWT token fetch'
+    description: 'Shared secret for custom JWT endpoint'
     required: false
-  biscuit-private-key:
-    description: 'Ed25519 private key (hex) for signing biscuit authorization tokens'
-    required: false
-
-  # Authentication — API key (simpler, less reliable)
-  api-key:
-    description: 'SxT Gateway API key (fallback if JWT credentials not provided)'
+  biscuit:
+    description: 'Pre-signed biscuit token for table-level authorization (from SxT subscription)'
     required: false
 
   # Shared config

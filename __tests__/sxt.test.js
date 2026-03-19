@@ -28,7 +28,7 @@ function mockError(status, body) {
 const DEFAULT_CONFIG = {
   authUrl: 'https://auth.example.com/token',
   authSecret: 'test-secret',
-  biscuitPrivateKey: 'deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef',
+  biscuit: 'test-biscuit-token',
   schemaName: 'testschema',
 }
 
@@ -173,51 +173,31 @@ describe('SxtClient', () => {
     })
   })
 
-  describe('operation detection', () => {
-    const client = new SxtClient(DEFAULT_CONFIG)
+  describe('biscuit passthrough', () => {
+    test('includes biscuit in SQL request when provided', async () => {
+      const client = new SxtClient(DEFAULT_CONFIG)
+      mockOk(authFixture)
+      mockOk(queryFixture)
 
-    test('detects SELECT', () => {
-      expect(client.detectOperation('SELECT * FROM t')).toBe('dql_select')
+      await client.query('SELECT 1')
+
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body)
+      expect(body.biscuits).toEqual(['test-biscuit-token'])
     })
 
-    test('detects INSERT', () => {
-      expect(client.detectOperation('INSERT INTO t VALUES (1)')).toBe('dml_insert')
-    })
+    test('omits biscuits when not provided', async () => {
+      const client = new SxtClient({
+        authUrl: DEFAULT_CONFIG.authUrl,
+        authSecret: DEFAULT_CONFIG.authSecret,
+        schemaName: DEFAULT_CONFIG.schemaName,
+      })
+      mockOk(authFixture)
+      mockOk(queryFixture)
 
-    test('detects UPDATE', () => {
-      expect(client.detectOperation('UPDATE t SET x = 1')).toBe('dml_update')
-    })
+      await client.query('SELECT 1')
 
-    test('detects DELETE', () => {
-      expect(client.detectOperation('DELETE FROM t WHERE id = 1')).toBe('dml_delete')
-    })
-
-    test('detects CREATE', () => {
-      expect(client.detectOperation('CREATE TABLE t (id INT)')).toBe('ddl_create')
-    })
-
-    test('detects DROP', () => {
-      expect(client.detectOperation('DROP TABLE t')).toBe('ddl_drop')
-    })
-  })
-
-  describe('resource extraction', () => {
-    const client = new SxtClient(DEFAULT_CONFIG)
-
-    test('extracts schema.table from SELECT', () => {
-      expect(client.extractResource('SELECT * FROM eth.blocks')).toBe('eth.blocks')
-    })
-
-    test('extracts from INSERT INTO', () => {
-      expect(client.extractResource("INSERT INTO myapp.logs VALUES ('x')")).toBe('myapp.logs')
-    })
-
-    test('extracts from UPDATE', () => {
-      expect(client.extractResource('UPDATE myapp.users SET name = 1')).toBe('myapp.users')
-    })
-
-    test('falls back to schema wildcard', () => {
-      expect(client.extractResource('SELECT 1')).toBe('testschema.*')
+      const body = JSON.parse(mockFetch.mock.calls[1][1].body)
+      expect(body.biscuits).toBeUndefined()
     })
   })
 
