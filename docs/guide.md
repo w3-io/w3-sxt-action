@@ -7,6 +7,8 @@ complexity: intermediate
 
 # Space and Time
 
+[Space and Time](https://spaceandtime.io) is a decentralized data infrastructure with ZK-proven SQL queries. Their Proof of SQL technology provides cryptographic verification that query results are correct — no trust required. Indexes Ethereum, Bitcoin, and Base chain data (blocks, transactions, tokens, NFTs) and supports custom tables for off-chain application data. Audited by HashLock, Spearbit, Pashov, and Cantin. Use this action to query blockchain data with SQL, store workflow state, build compliance audit trails, or power data-driven smart contract logic.
+
 Decentralized SQL database with ZK-proven query results. Query indexed
 blockchain data (Ethereum, Bitcoin, Base), create custom tables, and
 execute full CRUD operations with JWT + biscuit authentication.
