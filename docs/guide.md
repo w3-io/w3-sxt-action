@@ -229,7 +229,7 @@ Instead, validate or sanitize inputs in a prior step:
     sql: "SELECT * FROM MY_APP.EVENTS WHERE id = ${{ github.event.inputs.id }}"
 ```
 
-## Beyond the API: on-chain ZK queries
+## Beyond this W3 integration
 
 This action queries Space and Time's managed database via REST API.
 SxT also offers **on-chain ZK-proven queries** — smart contracts can
