@@ -229,6 +229,30 @@ Instead, validate or sanitize inputs in a prior step:
     sql: "SELECT * FROM MY_APP.EVENTS WHERE id = ${{ github.event.inputs.id }}"
 ```
 
+## Beyond the API: on-chain ZK queries
+
+This action queries Space and Time's managed database via REST API.
+SxT also offers **on-chain ZK-proven queries** — smart contracts can
+request SQL results and receive cryptographic proof that the data
+is correct, directly on-chain.
+
+| Layer | What | Trust model |
+|-------|------|-------------|
+| This action (off-chain) | Query chain data, manage tables, store workflow state | Authenticated API (JWT + biscuit) |
+| SxT ZK coprocessor (on-chain) | Smart contracts query data with Proof of SQL | Cryptographic proof verified on-chain |
+
+The action is ideal for workflow logic: query Ethereum token balances,
+store processing state, build audit trails. The ZK coprocessor extends
+this to smart contracts that need *provably correct* data — DeFi
+protocols, governance systems, or compliance automation where "trust
+the API" isn't sufficient.
+
+The same schemas and tables you create and query through this action
+are accessible to smart contracts via the ZK coprocessor. Your
+workflow data becomes a resource for on-chain logic.
+
+For on-chain integration, see [SxT's ZK coprocessor docs](https://docs.spaceandtime.io).
+
 ## Retry behavior
 
 The action retries automatically on:
