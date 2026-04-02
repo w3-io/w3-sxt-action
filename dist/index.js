@@ -25660,6 +25660,13 @@ module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:events"
 
 /***/ }),
 
+/***/ 7067:
+/***/ ((module) => {
+
+module.exports = __WEBPACK_EXTERNAL_createRequire(import.meta.url)("node:http");
+
+/***/ }),
+
 /***/ 7075:
 /***/ ((module) => {
 
@@ -27418,6 +27425,64 @@ module.exports = parseParams
 /******/ }
 /******/ 
 /************************************************************************/
+/******/ /* webpack/runtime/create fake namespace object */
+/******/ (() => {
+/******/ 	var getProto = Object.getPrototypeOf ? (obj) => (Object.getPrototypeOf(obj)) : (obj) => (obj.__proto__);
+/******/ 	var leafPrototypes;
+/******/ 	// create a fake namespace object
+/******/ 	// mode & 1: value is a module id, require it
+/******/ 	// mode & 2: merge all properties of value into the ns
+/******/ 	// mode & 4: return value when already ns object
+/******/ 	// mode & 16: return value when it's Promise-like
+/******/ 	// mode & 8|1: behave like require
+/******/ 	__nccwpck_require__.t = function(value, mode) {
+/******/ 		if(mode & 1) value = this(value);
+/******/ 		if(mode & 8) return value;
+/******/ 		if(typeof value === 'object' && value) {
+/******/ 			if((mode & 4) && value.__esModule) return value;
+/******/ 			if((mode & 16) && typeof value.then === 'function') return value;
+/******/ 		}
+/******/ 		var ns = Object.create(null);
+/******/ 		__nccwpck_require__.r(ns);
+/******/ 		var def = {};
+/******/ 		leafPrototypes = leafPrototypes || [null, getProto({}), getProto([]), getProto(getProto)];
+/******/ 		for(var current = mode & 2 && value; typeof current == 'object' && !~leafPrototypes.indexOf(current); current = getProto(current)) {
+/******/ 			Object.getOwnPropertyNames(current).forEach((key) => (def[key] = () => (value[key])));
+/******/ 		}
+/******/ 		def['default'] = () => (value);
+/******/ 		__nccwpck_require__.d(ns, def);
+/******/ 		return ns;
+/******/ 	};
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/define property getters */
+/******/ (() => {
+/******/ 	// define getter functions for harmony exports
+/******/ 	__nccwpck_require__.d = (exports, definition) => {
+/******/ 		for(var key in definition) {
+/******/ 			if(__nccwpck_require__.o(definition, key) && !__nccwpck_require__.o(exports, key)) {
+/******/ 				Object.defineProperty(exports, key, { enumerable: true, get: definition[key] });
+/******/ 			}
+/******/ 		}
+/******/ 	};
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/hasOwnProperty shorthand */
+/******/ (() => {
+/******/ 	__nccwpck_require__.o = (obj, prop) => (Object.prototype.hasOwnProperty.call(obj, prop))
+/******/ })();
+/******/ 
+/******/ /* webpack/runtime/make namespace object */
+/******/ (() => {
+/******/ 	// define __esModule on exports
+/******/ 	__nccwpck_require__.r = (exports) => {
+/******/ 		if(typeof Symbol !== 'undefined' && Symbol.toStringTag) {
+/******/ 			Object.defineProperty(exports, Symbol.toStringTag, { value: 'Module' });
+/******/ 		}
+/******/ 		Object.defineProperty(exports, '__esModule', { value: true });
+/******/ 	};
+/******/ })();
+/******/ 
 /******/ /* webpack/runtime/compat */
 /******/ 
 /******/ if (typeof __nccwpck_require__ !== 'undefined') __nccwpck_require__.ab = new URL('.', import.meta.url).pathname.slice(import.meta.url.match(/^file:\/\/\/\w:/) ? 1 : 0, -1) + "/";
@@ -27426,7 +27491,512 @@ module.exports = parseParams
 var __webpack_exports__ = {};
 
 // EXTERNAL MODULE: ./node_modules/@actions/core/lib/core.js
-var core = __nccwpck_require__(7484);
+var lib_core = __nccwpck_require__(7484);
+;// CONCATENATED MODULE: ./node_modules/@w3-io/action-core/dist/input.js
+
+/**
+ * Parse a JSON input. Returns the parsed value or undefined if empty.
+ * Throws with a clear message if the input contains invalid JSON.
+ */
+function parseJsonInput(name) {
+    const raw = core.getInput(name);
+    if (!raw.trim())
+        return undefined;
+    try {
+        return JSON.parse(raw);
+    }
+    catch {
+        throw new Error(`Input '${name}' is not valid JSON: ${raw.slice(0, 100)}`);
+    }
+}
+/**
+ * Get a required input. Throws if missing or empty.
+ */
+function requireInput(name) {
+    const value = core.getInput(name);
+    if (!value.trim()) {
+        throw new Error(`Required input '${name}' is missing`);
+    }
+    return value;
+}
+/**
+ * Get an optional input with a default value.
+ */
+function getOptionalInput(name, defaultValue = "") {
+    const value = core.getInput(name);
+    return value.trim() || defaultValue;
+}
+
+;// CONCATENATED MODULE: ./node_modules/@w3-io/action-core/dist/output.js
+
+/**
+ * Set a JSON output. Serializes exactly once — prevents double-encoding.
+ *
+ * If the value is already a string, it's set directly.
+ * If it's an object/array/number/boolean, it's JSON.stringified once.
+ */
+function setJsonOutput(name, value) {
+    const serialized = typeof value === "string" ? value : JSON.stringify(value);
+    lib_core.setOutput(name, serialized);
+}
+/**
+ * Set multiple outputs at once.
+ */
+function setOutputs(outputs) {
+    for (const [key, value] of Object.entries(outputs)) {
+        setJsonOutput(key, value);
+    }
+}
+
+;// CONCATENATED MODULE: ./node_modules/@w3-io/action-core/dist/error.js
+
+/**
+ * Structured error with code, message, and optional details.
+ */
+class error_W3ActionError extends Error {
+    code;
+    statusCode;
+    details;
+    constructor(code, message, options) {
+        super(message);
+        this.name = "W3ActionError";
+        this.code = code;
+        this.statusCode = options?.statusCode;
+        this.details = options?.details;
+    }
+}
+/**
+ * Top-level error handler for action entry points.
+ *
+ * Usage:
+ *   main().catch(handleError);
+ */
+function handleError(error) {
+    if (error instanceof error_W3ActionError) {
+        lib_core.setOutput("error-code", error.code);
+        if (error.statusCode)
+            lib_core.setOutput("status-code", error.statusCode);
+        lib_core.setFailed(`[${error.code}] ${error.message}`);
+    }
+    else if (error instanceof Error) {
+        lib_core.setFailed(error.message);
+    }
+    else {
+        lib_core.setFailed(String(error));
+    }
+}
+
+;// CONCATENATED MODULE: ./node_modules/@w3-io/action-core/dist/http.js
+
+/**
+ * Make an HTTP request with timeout, retry, and structured errors.
+ *
+ * - Retries on 429 and 5xx with exponential backoff
+ * - Parses JSON response automatically
+ * - Throws W3ActionError with status code on failure
+ */
+async function request(url, options = {}) {
+    const { method = "GET", headers = {}, body, timeout = 30000, retries = 2, retryDelay = 1000, } = options;
+    const init = {
+        method,
+        headers: {
+            "Content-Type": "application/json",
+            ...headers,
+        },
+        signal: AbortSignal.timeout(timeout),
+    };
+    if (body !== undefined) {
+        init.body = typeof body === "string" ? body : JSON.stringify(body);
+    }
+    let lastError;
+    for (let attempt = 0; attempt <= retries; attempt++) {
+        try {
+            const res = await fetch(url, init);
+            const raw = await res.text();
+            let parsed;
+            try {
+                parsed = JSON.parse(raw);
+            }
+            catch {
+                parsed = raw;
+            }
+            const responseHeaders = {};
+            res.headers.forEach((v, k) => {
+                responseHeaders[k] = v;
+            });
+            if (!res.ok) {
+                // Retry on 429 (rate limit) and 5xx (server error)
+                if ((res.status === 429 || res.status >= 500) &&
+                    attempt < retries) {
+                    await sleep(retryDelay * 2 ** attempt);
+                    continue;
+                }
+                throw new W3ActionError("HTTP_ERROR", `${method} ${url}: ${res.status}`, {
+                    statusCode: res.status,
+                    details: parsed,
+                });
+            }
+            return { status: res.status, headers: responseHeaders, body: parsed, raw };
+        }
+        catch (error) {
+            if (error instanceof W3ActionError)
+                throw error;
+            lastError = error instanceof Error ? error : new Error(String(error));
+            if (attempt < retries) {
+                await sleep(retryDelay * 2 ** attempt);
+                continue;
+            }
+        }
+    }
+    throw new W3ActionError("REQUEST_FAILED", `${method} ${url}: ${lastError?.message ?? "unknown error"}`);
+}
+function sleep(ms) {
+    return new Promise((resolve) => setTimeout(resolve, ms));
+}
+/**
+ * Convenience: add API key auth header.
+ */
+function apiKeyAuth(key, headerName = "Authorization", prefix = "Bearer") {
+    return { [headerName]: `${prefix} ${key}` };
+}
+/**
+ * Convenience: add basic auth header.
+ */
+function basicAuth(username, password) {
+    const encoded = Buffer.from(`${username}:${password}`).toString("base64");
+    return { Authorization: `Basic ${encoded}` };
+}
+
+;// CONCATENATED MODULE: ./node_modules/@w3-io/action-core/dist/command.js
+
+
+/**
+ * Create a command router that dispatches on the `command` input.
+ *
+ * Usage:
+ *   const router = createCommandRouter({
+ *     "create-payment": async () => { ... },
+ *     "get-payment": async () => { ... },
+ *   });
+ *   router();  // reads `command` input, dispatches, handles errors
+ */
+function createCommandRouter(commands) {
+    return () => {
+        const command = lib_core.getInput("command", { required: true });
+        const handler = commands[command];
+        if (!handler) {
+            const available = Object.keys(commands).join(", ");
+            lib_core.setFailed(`Unknown command: '${command}'. Available: ${available}`);
+            return;
+        }
+        handler().catch(handleError);
+    };
+}
+
+;// CONCATENATED MODULE: ./node_modules/@w3-io/action-core/dist/bridge.js
+/**
+ * W3 Syscall Bridge client.
+ *
+ * The bridge is an HTTP server running on a Unix socket (production)
+ * or TCP port (macOS dev fallback), started per-step by the Docker
+ * backend. It provides access to chain operations, cryptographic
+ * primitives, and protocol-managed secrets without bundling SDKs
+ * in the action container.
+ *
+ * Connection is automatic:
+ *   - $W3_BRIDGE_SOCKET → Unix socket (production)
+ *   - $W3_BRIDGE_URL    → TCP URL (macOS Docker Desktop fallback)
+ *
+ * Usage:
+ *   import { bridge } from "@w3-io/action-core";
+ *
+ *   const balance = await bridge.chain("ethereum", "get-balance", {
+ *     address: "0x...",
+ *   });
+ *
+ *   const hash = await bridge.crypto("keccak-256", { data: "0xdeadbeef" });
+ */
+
+// ---------------------------------------------------------------------------
+// Transport
+// ---------------------------------------------------------------------------
+/**
+ * Resolve the bridge endpoint from environment variables.
+ *
+ * Returns a fetch-compatible URL and optional Unix socket path.
+ */
+function resolveEndpoint() {
+    const bridgeUrl = process.env.W3_BRIDGE_URL;
+    if (bridgeUrl) {
+        return { url: bridgeUrl };
+    }
+    const socketPath = process.env.W3_BRIDGE_SOCKET ?? "/var/run/w3/bridge.sock";
+    // Node's fetch doesn't support Unix sockets natively.
+    // We use http.request for Unix socket transport.
+    return { url: "http://localhost", socketPath };
+}
+/**
+ * Make an HTTP request to the bridge. Handles both TCP and Unix socket
+ * transports transparently.
+ */
+async function bridgeRequest(path, body) {
+    const { url, socketPath } = resolveEndpoint();
+    if (socketPath) {
+        // Unix socket transport via Node's http module
+        const http = await Promise.resolve(/* import() */).then(__nccwpck_require__.t.bind(__nccwpck_require__, 7067, 19));
+        return new Promise((resolve, reject) => {
+            const payload = body ? JSON.stringify(body) : undefined;
+            const req = http.request({
+                socketPath,
+                path,
+                method: body ? "POST" : "GET",
+                headers: {
+                    "Content-Type": "application/json",
+                    ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
+                },
+            }, (res) => {
+                let data = "";
+                res.on("data", (chunk) => (data += chunk));
+                res.on("end", () => {
+                    if (!res.statusCode || res.statusCode >= 400) {
+                        try {
+                            const err = JSON.parse(data);
+                            reject(new error_W3ActionError(err.code ?? "BRIDGE_ERROR", err.error ?? `Bridge returned ${res.statusCode}`, { statusCode: res.statusCode, details: err }));
+                        }
+                        catch {
+                            reject(new error_W3ActionError("BRIDGE_ERROR", data || `HTTP ${res.statusCode}`, {
+                                statusCode: res.statusCode,
+                            }));
+                        }
+                        return;
+                    }
+                    try {
+                        const parsed = JSON.parse(data);
+                        resolve(parsed);
+                    }
+                    catch {
+                        resolve(data);
+                    }
+                });
+            });
+            req.on("error", (err) => reject(new error_W3ActionError("BRIDGE_UNAVAILABLE", err.message)));
+            if (payload)
+                req.write(payload);
+            req.end();
+        });
+    }
+    // TCP transport via fetch
+    const fullUrl = `${url}${path}`;
+    const init = {
+        method: body ? "POST" : "GET",
+        headers: { "Content-Type": "application/json" },
+        ...(body ? { body: JSON.stringify(body) } : {}),
+    };
+    const res = await fetch(fullUrl, init);
+    const text = await res.text();
+    if (!res.ok) {
+        let parsed;
+        try {
+            parsed = JSON.parse(text);
+        }
+        catch {
+            // not JSON
+        }
+        throw new error_W3ActionError(parsed?.code ?? "BRIDGE_ERROR", parsed?.error ?? text ?? `Bridge returned ${res.status}`, { statusCode: res.status, details: parsed });
+    }
+    try {
+        return JSON.parse(text);
+    }
+    catch {
+        return text;
+    }
+}
+/**
+ * Check if the bridge is available.
+ */
+async function health() {
+    try {
+        const res = (await bridgeRequest("/health"));
+        return res.ok === true;
+    }
+    catch {
+        return false;
+    }
+}
+/**
+ * Call a chain operation via the bridge.
+ *
+ * @param chain - "ethereum", "bitcoin", or "solana"
+ * @param action - Operation name (e.g. "get-balance", "transfer", "call-contract")
+ * @param params - Action-specific parameters
+ * @param network - Network identifier (e.g. "ethereum-sepolia", "avalanche-fuji")
+ */
+async function chain(chainName, action, params, network) {
+    return (await bridgeRequest(`/${chainName}/${action}`, {
+        network: network ?? chainName,
+        params,
+    }));
+}
+/**
+ * Call a crypto operation via the bridge.
+ *
+ * @param action - Operation name (e.g. "keccak-256", "aes-encrypt", "jwt-create")
+ * @param params - Operation-specific parameters
+ */
+async function bridge_crypto(action, params) {
+    return (await bridgeRequest(`/crypto/${action}`, {
+        params,
+    }));
+}
+/**
+ * The bridge client. Import and use:
+ *
+ *   import { bridge } from "@w3-io/action-core";
+ *
+ *   // Chain operations
+ *   const bal = await bridge.chain("ethereum", "get-balance", { address });
+ *
+ *   // Crypto
+ *   const hash = await bridge.crypto("keccak-256", { data: "0x..." });
+ *
+ *   // Health check
+ *   const ok = await bridge.health();
+ */
+const bridge = {
+    health,
+    chain,
+    crypto: bridge_crypto,
+};
+
+;// CONCATENATED MODULE: ./node_modules/@w3-io/action-core/dist/test.js
+/**
+ * Test utilities for W3 actions.
+ *
+ * Mocks @actions/core so you can test command handlers in isolation
+ * without running the full GitHub Actions runtime.
+ *
+ * Usage:
+ *   import { mockAction, expectOutput, expectFailed } from "@w3-io/action-core/test";
+ *
+ *   test("keccak-256 hashes correctly", async () => {
+ *     mockAction({ command: "keccak-256", input: "48656c6c6f" });
+ *     await import("../src/index.js");
+ *     expectOutput("result", (val) => val.includes("hash"));
+ *   });
+ */
+let _inputs = {};
+let _outputs = new Map();
+let _failed = null;
+/**
+ * Set up mock inputs for the next action invocation.
+ * Call this before importing/running the action.
+ */
+function mockAction(inputs) {
+    _inputs = inputs;
+    _outputs = new Map();
+    _failed = null;
+    // Mock process.env for @actions/core.getInput()
+    for (const [key, value] of Object.entries(inputs)) {
+        const envKey = `INPUT_${key.replace(/-/g, "_").toUpperCase()}`;
+        process.env[envKey] = value;
+    }
+}
+/**
+ * Get an output that was set during action execution.
+ */
+function getOutput(name) {
+    return _outputs.get(name);
+}
+/**
+ * Assert an output was set and optionally validate its value.
+ */
+function expectOutput(name, validator) {
+    const value = _outputs.get(name);
+    if (value === undefined) {
+        throw new Error(`Expected output "${name}" to be set. Got: ${JSON.stringify(Object.fromEntries(_outputs))}`);
+    }
+    if (validator && !validator(value)) {
+        throw new Error(`Output "${name}" failed validation. Value: ${value}`);
+    }
+}
+/**
+ * Assert the action failed with a specific message pattern.
+ */
+function expectFailed(pattern) {
+    if (_failed === null) {
+        throw new Error("Expected action to fail, but it succeeded");
+    }
+    if (pattern) {
+        const matches = typeof pattern === "string"
+            ? _failed.includes(pattern)
+            : pattern.test(_failed);
+        if (!matches) {
+            throw new Error(`Expected failure matching "${pattern}", got: "${_failed}"`);
+        }
+    }
+}
+/**
+ * Assert the action succeeded (did not call setFailed).
+ */
+function expectSuccess() {
+    if (_failed !== null) {
+        throw new Error(`Expected action to succeed, but it failed: "${_failed}"`);
+    }
+}
+/**
+ * Clean up mock environment after tests.
+ */
+function cleanupMock() {
+    for (const key of Object.keys(process.env)) {
+        if (key.startsWith("INPUT_")) {
+            delete process.env[key];
+        }
+    }
+    _inputs = {};
+    _outputs = new Map();
+    _failed = null;
+}
+/**
+ * Create a mock @actions/core module that captures outputs and failures.
+ *
+ * Use this to intercept setOutput/setFailed calls:
+ *   const core = createMockCore();
+ *   // pass core to your command handler
+ */
+function createMockCore() {
+    return {
+        getInput: (name, opts) => {
+            const value = _inputs[name] ?? "";
+            if (opts?.required && !value) {
+                throw new Error(`Input required and not supplied: ${name}`);
+            }
+            return value;
+        },
+        setOutput: (name, value) => {
+            _outputs.set(name, typeof value === "string" ? value : JSON.stringify(value));
+        },
+        setFailed: (message) => {
+            _failed = message;
+        },
+        info: (_msg) => { },
+        warning: (_msg) => { },
+        error: (_msg) => { },
+        debug: (_msg) => { },
+        summary: {
+            addHeading: () => ({ addRaw: () => ({ write: async () => { } }) }),
+        },
+    };
+}
+
+;// CONCATENATED MODULE: ./node_modules/@w3-io/action-core/dist/index.js
+
+
+
+
+
+
+
+
 ;// CONCATENATED MODULE: ./src/sxt.js
 /**
  * Space and Time API client.
@@ -27813,59 +28383,80 @@ class SxtClient {
   }
 }
 
-;// CONCATENATED MODULE: ./src/main.js
+;// CONCATENATED MODULE: ./src/index.js
 
 
 
-const COMMANDS = {
-  query: runQuery,
-  execute: runExecute,
-  ddl: runDdl,
-  'list-tables': runListTables,
-  'list-chains': runListChains,
-}
 
-async function run() {
-  try {
-    const command = core.getInput('command', { required: true })
-    const handler = COMMANDS[command]
+const router = createCommandRouter({
+  'query': async () => {
+    const client = createClient()
+    const sql = lib_core.getInput('sql', { required: true })
+    const resources = parseList(lib_core.getInput('resources'))
+    const queryType = lib_core.getInput('query-type') || undefined
 
-    if (!handler) {
-      core.setFailed(`Unknown command: "${command}". Available: ${Object.keys(COMMANDS).join(', ')}`)
-      return
-    }
+    const result = await client.query(sql, { resources, queryType })
+    setJsonOutput('result', result)
+    writeSummary('query', result)
+  },
 
-    const client = new SxtClient({
-      apiUrl: core.getInput('api-url') || undefined,
-      apiKey: core.getInput('api-key') || undefined,
-      authUrl: core.getInput('auth-url') || undefined,
-      authSecret: core.getInput('auth-secret') || undefined,
-      biscuit: core.getInput('biscuit') || undefined,
-      schemaName: core.getInput('schema-name', { required: true }),
-      originApp: core.getInput('origin-app') || undefined,
-      maxRetries: core.getInput('max-retries') ? Number(core.getInput('max-retries')) : undefined,
-      retryDelay: core.getInput('retry-delay') ? Number(core.getInput('retry-delay')) : undefined,
-      timeout: core.getInput('timeout') ? Number(core.getInput('timeout')) : undefined,
-    })
+  'execute': async () => {
+    const client = createClient()
+    const sql = lib_core.getInput('sql', { required: true })
+    const resources = parseList(lib_core.getInput('resources'))
 
-    if (client.authMode === 'apikey') {
-      core.warning(
-        'Using API key auth (Gateway Proxy). For production, use JWT + biscuit auth ' +
-          'by providing auth-url, auth-secret, and biscuit-private-key.',
-      )
-    }
+    const result = await client.execute(sql, { resources })
+    setJsonOutput('result', result)
+    writeSummary('execute', result)
+  },
 
-    const result = await handler(client)
-    core.setOutput('result', JSON.stringify(result))
+  'ddl': async () => {
+    const client = createClient()
+    const sql = lib_core.getInput('sql', { required: true })
 
-    writeSummary(command, result)
-  } catch (error) {
-    if (error instanceof SxtError) {
-      core.setFailed(`SxT error (${error.code}): ${error.message}`)
-    } else {
-      core.setFailed(error.message)
-    }
+    const result = await client.ddl(sql)
+    setJsonOutput('result', result)
+    writeSummary('ddl', result)
+  },
+
+  'list-tables': async () => {
+    const client = createClient()
+    const result = await client.listTables()
+    setJsonOutput('result', result)
+    writeSummary('list-tables', result)
+  },
+
+  'list-chains': async () => {
+    const client = createClient()
+    const chain = lib_core.getInput('chain') || undefined
+    const result = await client.listChains(chain)
+    setJsonOutput('result', result)
+    writeSummary('list-chains', result)
+  },
+})
+
+function createClient() {
+  const client = new SxtClient({
+    apiUrl: lib_core.getInput('api-url') || undefined,
+    apiKey: lib_core.getInput('api-key') || undefined,
+    authUrl: lib_core.getInput('auth-url') || undefined,
+    authSecret: lib_core.getInput('auth-secret') || undefined,
+    biscuit: lib_core.getInput('biscuit') || undefined,
+    schemaName: lib_core.getInput('schema-name', { required: true }),
+    originApp: lib_core.getInput('origin-app') || undefined,
+    maxRetries: lib_core.getInput('max-retries') ? Number(lib_core.getInput('max-retries')) : undefined,
+    retryDelay: lib_core.getInput('retry-delay') ? Number(lib_core.getInput('retry-delay')) : undefined,
+    timeout: lib_core.getInput('timeout') ? Number(lib_core.getInput('timeout')) : undefined,
+  })
+
+  if (client.authMode === 'apikey') {
+    lib_core.warning(
+      'Using API key auth (Gateway Proxy). For production, use JWT + biscuit auth ' +
+        'by providing auth-url, auth-secret, and biscuit-private-key.',
+    )
   }
+
+  return client
 }
 
 function parseList(input) {
@@ -27876,35 +28467,6 @@ function parseList(input) {
     .filter(Boolean)
 }
 
-async function runQuery(client) {
-  const sql = core.getInput('sql', { required: true })
-  const resources = parseList(core.getInput('resources'))
-  const queryType = core.getInput('query-type') || undefined
-
-  return client.query(sql, { resources, queryType })
-}
-
-async function runExecute(client) {
-  const sql = core.getInput('sql', { required: true })
-  const resources = parseList(core.getInput('resources'))
-
-  return client.execute(sql, { resources })
-}
-
-async function runDdl(client) {
-  const sql = core.getInput('sql', { required: true })
-  return client.ddl(sql)
-}
-
-async function runListTables(client) {
-  return client.listTables()
-}
-
-async function runListChains(client) {
-  const chain = core.getInput('chain') || undefined
-  return client.listChains(chain)
-}
-
 function writeSummary(command, result) {
   const heading = `Space and Time: ${command}`
 
@@ -27913,25 +28475,21 @@ function writeSummary(command, result) {
     const headerRow = columns.map((c) => ({ data: c, header: true }))
     const dataRows = result.slice(0, 20).map((row) => columns.map((c) => String(row[c] ?? '')))
 
-    core.summary.addHeading(heading, 3)
+    lib_core.summary.addHeading(heading, 3)
 
     if (result.length > 20) {
-      core.summary.addRaw(`Showing 20 of ${result.length} rows\n\n`)
+      lib_core.summary.addRaw(`Showing 20 of ${result.length} rows\n\n`)
     }
 
-    core.summary.addTable([headerRow, ...dataRows]).write()
+    lib_core.summary.addTable([headerRow, ...dataRows]).write()
     return
   }
 
-  core.summary
+  lib_core.summary
     .addHeading(heading, 3)
     .addCodeBlock(JSON.stringify(result, null, 2), 'json')
     .write()
 }
 
-;// CONCATENATED MODULE: ./src/index.js
-// Entry point. This file rarely needs changes — it just calls run().
-
-
-run()
+router()
 
