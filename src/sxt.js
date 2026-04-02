@@ -20,6 +20,37 @@
 
 const DEFAULT_PROXY_URL = 'https://proxy.api.makeinfinite.dev'
 
+/**
+ * Validate SQL input to reject common injection patterns.
+ * The SxT API does not support parameterized queries, so we validate
+ * at the client level to catch obvious injection attempts.
+ */
+function validateSql(sql) {
+  const trimmed = sql.trim()
+
+  // Reject multiple statements (semicolons not inside string literals)
+  // Simple heuristic: reject any semicolons that aren't at the very end
+  const withoutEnd = trimmed.replace(/;\s*$/, '')
+  if (withoutEnd.includes(';')) {
+    throw new SxtError('SQL contains multiple statements (semicolons). Only single statements are allowed.', {
+      code: 'SQL_VALIDATION',
+    })
+  }
+}
+
+/**
+ * Validate an identifier (schema name, chain name) to prevent injection
+ * in dynamically constructed SQL.
+ */
+function validateIdentifier(value, label) {
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(value)) {
+    throw new SxtError(
+      `Invalid ${label}: "${value}". Only alphanumeric characters and underscores are allowed.`,
+      { code: 'SQL_VALIDATION' },
+    )
+  }
+}
+
 export class SxtError extends Error {
   constructor(message, { status, body, code } = {}) {
     super(message)
@@ -98,6 +129,7 @@ export class SxtClient {
    */
   async query(sql, { resources, queryType = 'OLTP' } = {}) {
     if (!sql) throw new SxtError('sql is required', { code: 'MISSING_SQL' })
+    validateSql(sql)
     return this.executeSql(sql, { resources, queryType })
   }
 
@@ -111,6 +143,7 @@ export class SxtClient {
    */
   async execute(sql, { resources } = {}) {
     if (!sql) throw new SxtError('sql is required', { code: 'MISSING_SQL' })
+    validateSql(sql)
     return this.executeSql(sql, { resources })
   }
 
@@ -122,6 +155,7 @@ export class SxtClient {
    */
   async ddl(sql) {
     if (!sql) throw new SxtError('sql is required', { code: 'MISSING_SQL' })
+    validateSql(sql)
     return this.executeSql(sql)
   }
 
@@ -131,6 +165,7 @@ export class SxtClient {
    * @returns {Array} Table metadata
    */
   async listTables() {
+    validateIdentifier(this.schemaName, 'schema-name')
     const sql = `SHOW TABLES IN ${this.schemaName}`
     return this.executeSql(sql)
   }
@@ -143,6 +178,7 @@ export class SxtClient {
    */
   async listChains(chain) {
     const schema = chain ? chain.toUpperCase() : 'ETHEREUM'
+    validateIdentifier(schema, 'chain')
     const sql = `SELECT BLOCK_NUMBER, TIME_STAMP FROM ${schema}.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 5`
     return this.executeSql(sql)
   }
