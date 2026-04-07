@@ -1,4 +1,4 @@
-import { createCommandRouter, setJsonOutput, handleError } from '@w3-io/action-core'
+import { createCommandRouter, setJsonOutput, handleError, W3ActionError } from '@w3-io/action-core'
 import * as core from '@actions/core'
 import { SxtClient, SxtError } from './sxt.js'
 
