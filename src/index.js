@@ -1,9 +1,9 @@
-import { createCommandRouter, setJsonOutput, handleError, W3ActionError } from '@w3-io/action-core'
+import { createCommandRouter, setJsonOutput, handleError } from '@w3-io/action-core'
 import * as core from '@actions/core'
 import { SxtClient, SxtError } from './sxt.js'
 
 const router = createCommandRouter({
-  'query': async () => {
+  query: async () => {
     const client = createClient()
     const sql = core.getInput('sql', { required: true })
     const resources = parseList(core.getInput('resources'))
@@ -14,7 +14,7 @@ const router = createCommandRouter({
     writeSummary('query', result)
   },
 
-  'execute': async () => {
+  execute: async () => {
     const client = createClient()
     const sql = core.getInput('sql', { required: true })
     const resources = parseList(core.getInput('resources'))
@@ -24,7 +24,7 @@ const router = createCommandRouter({
     writeSummary('execute', result)
   },
 
-  'ddl': async () => {
+  ddl: async () => {
     const client = createClient()
     const sql = core.getInput('sql', { required: true })
 
@@ -105,4 +105,17 @@ function writeSummary(command, result) {
     .write()
 }
 
-router()
+try {
+  await router()
+} catch (error) {
+  if (error instanceof SxtError) {
+    core.setFailed(`SxT error (${error.code ?? 'UNKNOWN'}): ${error.message}`)
+    if (error.body) {
+      core.debug(
+        `SxT error body: ${typeof error.body === 'string' ? error.body : JSON.stringify(error.body)}`,
+      )
+    }
+  } else {
+    handleError(error)
+  }
+}
