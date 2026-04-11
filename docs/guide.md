@@ -23,7 +23,7 @@ execute full CRUD operations with JWT + biscuit authentication.
     command: query
     api-key: ${{ secrets.SXT_API_KEY }}
     schema-name: ETHEREUM
-    sql: "SELECT BLOCK_NUMBER, TIME_STAMP, TRANSACTION_COUNT FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 5"
+    sql: 'SELECT BLOCK_NUMBER, TIME_STAMP, TRANSACTION_COUNT FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 5'
 ```
 
 ## Authentication
@@ -31,12 +31,14 @@ execute full CRUD operations with JWT + biscuit authentication.
 Two modes, both bootstrap a JWT session automatically:
 
 **API key (recommended for getting started):**
+
 ```yaml
 with:
   api-key: ${{ secrets.SXT_API_KEY }}
 ```
 
 **Explicit JWT (for custom auth services):**
+
 ```yaml
 with:
   auth-url: ${{ secrets.SXT_AUTH_URL }}
@@ -44,6 +46,7 @@ with:
 ```
 
 **Biscuit authorization (for private tables):**
+
 ```yaml
 with:
   api-key: ${{ secrets.SXT_API_KEY }}
@@ -60,18 +63,18 @@ or `/biscuits` API endpoint.
 
 Execute a SELECT query. Returns result rows as JSON.
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `sql` | yes | SQL SELECT statement |
-| `resources` | no | Comma-separated table references for optimization |
-| `query-type` | no | `OLTP` or `OLAP` (default: `OLTP`) |
+| Input        | Required | Description                                       |
+| ------------ | -------- | ------------------------------------------------- |
+| `sql`        | yes      | SQL SELECT statement                              |
+| `resources`  | no       | Comma-separated table references for optimization |
+| `query-type` | no       | `OLTP` or `OLAP` (default: `OLTP`)                |
 
 **Output:**
 
 ```json
 [
-  {"BLOCK_NUMBER": 24689356, "TIME_STAMP": "2026-03-19 05:11:35", "TRANSACTION_COUNT": 106},
-  {"BLOCK_NUMBER": 24689355, "TIME_STAMP": "2026-03-19 05:11:23", "TRANSACTION_COUNT": 206}
+  { "BLOCK_NUMBER": 24689356, "TIME_STAMP": "2026-03-19 05:11:35", "TRANSACTION_COUNT": 106 },
+  { "BLOCK_NUMBER": 24689355, "TIME_STAMP": "2026-03-19 05:11:23", "TRANSACTION_COUNT": 206 }
 ]
 ```
 
@@ -79,10 +82,10 @@ Execute a SELECT query. Returns result rows as JSON.
 
 Execute DML (INSERT, UPDATE, DELETE).
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `sql` | yes | SQL DML statement |
-| `resources` | no | Table references |
+| Input       | Required | Description       |
+| ----------- | -------- | ----------------- |
+| `sql`       | yes      | SQL DML statement |
+| `resources` | no       | Table references  |
 
 **Output:** `[{"UPDATED": 3}]`
 
@@ -90,9 +93,9 @@ Execute DML (INSERT, UPDATE, DELETE).
 
 Execute DDL (CREATE TABLE, DROP TABLE, ALTER).
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `sql` | yes | SQL DDL statement |
+| Input | Required | Description       |
+| ----- | -------- | ----------------- |
+| `sql` | yes      | SQL DDL statement |
 
 **Output:** `{"success": true}`
 
@@ -104,9 +107,9 @@ List tables in the configured schema. No inputs beyond auth config.
 
 Query latest blocks from an indexed blockchain.
 
-| Input | Required | Description |
-|-------|----------|-------------|
-| `chain` | no | Chain name: `ETHEREUM`, `BITCOIN`, `BASE` (default: `ETHEREUM`) |
+| Input   | Required | Description                                                     |
+| ------- | -------- | --------------------------------------------------------------- |
+| `chain` | no       | Chain name: `ETHEREUM`, `BITCOIN`, `BASE` (default: `ETHEREUM`) |
 
 ## Available blockchain data
 
@@ -124,6 +127,7 @@ Custom smart contract data available via SxT's Smart Contract Indexing.
 ## SQL reference
 
 SxT supports standard SQL (ANSI-compliant, ACID):
+
 - `SELECT` with `WHERE`, `GROUP BY` (0-1 columns), `ORDER BY`, `LIMIT`, `OFFSET`
 - `INSERT`, `UPDATE`, `DELETE`
 - `CREATE TABLE`, `DROP TABLE`
@@ -146,7 +150,7 @@ ZK-proven queries.
     command: query
     api-key: ${{ secrets.SXT_API_KEY }}
     schema-name: ETHEREUM
-    sql: "SELECT BLOCK_NUMBER FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 1"
+    sql: 'SELECT BLOCK_NUMBER FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 1'
 
 - name: Bitcoin latest
   id: btc
@@ -155,7 +159,7 @@ ZK-proven queries.
     command: query
     api-key: ${{ secrets.SXT_API_KEY }}
     schema-name: BITCOIN
-    sql: "SELECT BLOCK_NUMBER FROM BITCOIN.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 1"
+    sql: 'SELECT BLOCK_NUMBER FROM BITCOIN.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 1'
 ```
 
 ### Create a table and insert data
@@ -168,7 +172,7 @@ ZK-proven queries.
     api-key: ${{ secrets.SXT_API_KEY }}
     biscuit: ${{ secrets.SXT_BISCUIT }}
     schema-name: MY_APP
-    sql: "CREATE TABLE MY_APP.EVENTS (id INT, event VARCHAR, ts VARCHAR, PRIMARY KEY (id))"
+    sql: 'CREATE TABLE MY_APP.EVENTS (id INT, event VARCHAR, ts VARCHAR, PRIMARY KEY (id))'
 
 - name: Insert event
   uses: w3-io/w3-sxt-action@v0
@@ -226,7 +230,7 @@ Instead, validate or sanitize inputs in a prior step:
     command: query
     api-key: ${{ secrets.SXT_API_KEY }}
     schema-name: MY_APP
-    sql: "SELECT * FROM MY_APP.EVENTS WHERE id = ${{ github.event.inputs.id }}"
+    sql: 'SELECT * FROM MY_APP.EVENTS WHERE id = ${{ github.event.inputs.id }}'
 ```
 
 ## Beyond this W3 integration
@@ -236,14 +240,14 @@ SxT also offers **on-chain ZK-proven queries** — smart contracts can
 request SQL results and receive cryptographic proof that the data
 is correct, directly on-chain.
 
-| Layer | What | Trust model |
-|-------|------|-------------|
-| This action (off-chain) | Query chain data, manage tables, store workflow state | Authenticated API (JWT + biscuit) |
-| SxT ZK coprocessor (on-chain) | Smart contracts query data with Proof of SQL | Cryptographic proof verified on-chain |
+| Layer                         | What                                                  | Trust model                           |
+| ----------------------------- | ----------------------------------------------------- | ------------------------------------- |
+| This action (off-chain)       | Query chain data, manage tables, store workflow state | Authenticated API (JWT + biscuit)     |
+| SxT ZK coprocessor (on-chain) | Smart contracts query data with Proof of SQL          | Cryptographic proof verified on-chain |
 
 The action is ideal for workflow logic: query Ethereum token balances,
 store processing state, build audit trails. The ZK coprocessor extends
-this to smart contracts that need *provably correct* data — DeFi
+this to smart contracts that need _provably correct_ data — DeFi
 protocols, governance systems, or compliance automation where "trust
 the API" isn't sufficient.
 
@@ -256,6 +260,7 @@ For on-chain integration, see [SxT's ZK coprocessor docs](https://docs.spaceandt
 ## Retry behavior
 
 The action retries automatically on:
+
 - **401** — refreshes JWT token and retries
 - **429** — exponential backoff (configurable via `retry-delay`)
 - **5xx** — exponential backoff

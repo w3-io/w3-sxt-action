@@ -20,7 +20,7 @@ commands:
       query-type:
         type: string
         required: false
-        description: "OLTP or OLAP (default: OLTP)"
+        description: 'OLTP or OLAP (default: OLTP)'
     outputs:
       result:
         type: array
@@ -41,7 +41,7 @@ commands:
     outputs:
       result:
         type: array
-        description: "[{UPDATED: <count>}]"
+        description: '[{UPDATED: <count>}]'
 
   - name: ddl
     description: >
@@ -55,7 +55,7 @@ commands:
     outputs:
       result:
         type: object
-        description: "{success: true}"
+        description: '{success: true}'
 
   - name: list-tables
     description: List tables in the configured schema.
@@ -73,7 +73,7 @@ commands:
       chain:
         type: string
         required: false
-        description: "Chain name (default: ETHEREUM). Also supports BITCOIN, BASE."
+        description: 'Chain name (default: ETHEREUM). Also supports BITCOIN, BASE.'
     outputs:
       result:
         type: array

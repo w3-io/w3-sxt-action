@@ -32,9 +32,12 @@ function validateSql(sql) {
   // Simple heuristic: reject any semicolons that aren't at the very end
   const withoutEnd = trimmed.replace(/;\s*$/, '')
   if (withoutEnd.includes(';')) {
-    throw new SxtError('SQL contains multiple statements (semicolons). Only single statements are allowed.', {
-      code: 'SQL_VALIDATION',
-    })
+    throw new SxtError(
+      'SQL contains multiple statements (semicolons). Only single statements are allowed.',
+      {
+        code: 'SQL_VALIDATION',
+      },
+    )
   }
 }
 
