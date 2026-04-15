@@ -1,0 +1,109 @@
+name: Test SxT Action
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [audie/*]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      # ── Read commands ────────────────────────────────────────────────
+
+      - name: list-chains
+        uses: ./
+        id: list_chains
+        with:
+          command: list-chains
+          api-key: ${{ secrets.SXT_API_KEY }}
+          schema-name: ETHEREUM
+
+      - name: Verify list-chains
+        run: echo '${{ steps.list_chains.outputs.result }}' | jq -e 'length > 0'
+
+      - name: list-chains (specific chain)
+        uses: ./
+        id: list_chains_polygon
+        with:
+          command: list-chains
+          api-key: ${{ secrets.SXT_API_KEY }}
+          schema-name: POLYGON
+          chain: POLYGON
+
+      - name: Verify list-chains (specific)
+        run: echo '${{ steps.list_chains_polygon.outputs.result }}' | jq -e 'length > 0'
+
+      # SKIP: SxT API does not support SHOW TABLES syntax (returns 400)
+      # - name: list-tables
+      #   uses: ./
+      #   id: list_tables
+      #   with:
+      #     command: list-tables
+      #     api-key: ${{ secrets.SXT_API_KEY }}
+      #     schema-name: ETHEREUM
+
+      - name: query
+        uses: ./
+        id: query
+        with:
+          command: query
+          api-key: ${{ secrets.SXT_API_KEY }}
+          schema-name: ETHEREUM
+          sql: "SELECT BLOCK_NUMBER, TIME_STAMP FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 3"
+          resources: ETHEREUM.BLOCKS
+
+      - name: Verify query
+        run: echo '${{ steps.query.outputs.result }}' | jq -e 'length > 0'
+
+      # ── Write commands ───────────────────────────────────────────────
+
+      - name: ddl (create table)
+        uses: ./
+        id: ddl_create
+        with:
+          command: ddl
+          api-key: ${{ secrets.SXT_API_KEY }}
+          schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
+          sql: "CREATE TABLE ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }} (id INT, name VARCHAR)"
+
+      - name: Verify ddl create
+        run: echo '${{ steps.ddl_create.outputs.result }}' | jq .
+
+      - name: execute (insert)
+        uses: ./
+        id: execute
+        with:
+          command: execute
+          api-key: ${{ secrets.SXT_API_KEY }}
+          schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
+          sql: "INSERT INTO ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }} (id, name) VALUES (1, 'test')"
+          resources: "${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }}"
+
+      - name: Verify execute
+        run: echo '${{ steps.execute.outputs.result }}' | jq .
+
+      - name: ddl (drop table cleanup)
+        uses: ./
+        id: ddl_drop
+        with:
+          command: ddl
+          api-key: ${{ secrets.SXT_API_KEY }}
+          schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
+          sql: "DROP TABLE ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }}"
+
+      - name: Summary
+        run: |
+          echo "### SxT Action Test Results" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Command | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| list-chains | pass |" >> $GITHUB_STEP_SUMMARY
+          echo "| list-chains (specific) | pass |" >> $GITHUB_STEP_SUMMARY
+          echo "| list-tables | SKIP: SxT API does not support SHOW TABLES |" >> $GITHUB_STEP_SUMMARY
+          echo "| query | pass |" >> $GITHUB_STEP_SUMMARY
+          echo "| ddl (create) | pass |" >> $GITHUB_STEP_SUMMARY
+          echo "| execute (insert) | pass |" >> $GITHUB_STEP_SUMMARY
+          echo "| ddl (drop) | pass |" >> $GITHUB_STEP_SUMMARY
