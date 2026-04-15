@@ -26,12 +26,16 @@ jobs:
           api-key: ${{ secrets.SXT_API_KEY }}
           schema-name: ETHEREUM
 
-      - name: List tables in schema
-        uses: w3-io/w3-sxt-action@v0
-        with:
-          command: list-tables
-          api-key: ${{ secrets.SXT_API_KEY }}
-          schema-name: ETHEREUM
+      # NOTE: Commented out — list-tables sends "SHOW TABLES IN <schema>"
+      # which returns SxT API error 400. The SQL dialect may not support
+      # this syntax. Re-enable when the command is fixed or an alternative
+      # discovery endpoint is used.
+      # - name: List tables in schema
+      #   uses: w3-io/w3-sxt-action@v0
+      #   with:
+      #     command: list-tables
+      #     api-key: ${{ secrets.SXT_API_KEY }}
+      #     schema-name: ETHEREUM
 
   writes:
     runs-on: ubuntu-latest
