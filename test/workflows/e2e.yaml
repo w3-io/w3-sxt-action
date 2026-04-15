@@ -1,0 +1,80 @@
+# E2E Test Workflow
+#
+# Exercises every command against real APIs.
+# Run on a local W3 network with:
+#   w3 workflow deploy test/workflows/e2e.yaml
+#   w3 workflow "sxt-e2e" trigger
+#
+# Prerequisites:
+#   - W3 local network running (make dev)
+#   - W3_SECRET_SXT_API_KEY set to a Space and Time API key
+
+name: sxt-e2e
+
+steps:
+  # ── Discovery ──────────────────────────────────────────────────────────
+
+  - name: List supported chains
+    uses: w3-io/w3-sxt-action@v0
+    with:
+      command: list-chains
+      api-key: ${{ secrets.SXT_API_KEY }}
+      schema-name: ETHEREUM
+
+  - name: List tables in schema
+    uses: w3-io/w3-sxt-action@v0
+    with:
+      command: list-tables
+      api-key: ${{ secrets.SXT_API_KEY }}
+      schema-name: ETHEREUM
+
+  # ── DDL — Create a test table ──────────────────────────────────────────
+
+  - name: Create a test table
+    uses: w3-io/w3-sxt-action@v0
+    with:
+      command: ddl
+      api-key: ${{ secrets.SXT_API_KEY }}
+      schema-name: W3_E2E_TEST
+      sql: "CREATE TABLE W3_E2E_TEST.e2e_items (id INT PRIMARY KEY, name VARCHAR(100), value DECIMAL(18,2))"
+
+  # ── DML — Insert test data ────────────────────────────────────────────
+
+  - name: Insert test rows
+    uses: w3-io/w3-sxt-action@v0
+    with:
+      command: execute
+      api-key: ${{ secrets.SXT_API_KEY }}
+      schema-name: W3_E2E_TEST
+      sql: "INSERT INTO W3_E2E_TEST.e2e_items (id, name, value) VALUES (1, 'alpha', 10.50), (2, 'beta', 25.00), (3, 'gamma', 42.99)"
+      resources: W3_E2E_TEST.e2e_items
+
+  # ── DQL — Query the data ──────────────────────────────────────────────
+
+  - name: Query all rows
+    uses: w3-io/w3-sxt-action@v0
+    with:
+      command: query
+      api-key: ${{ secrets.SXT_API_KEY }}
+      schema-name: W3_E2E_TEST
+      sql: "SELECT * FROM W3_E2E_TEST.e2e_items ORDER BY id"
+      resources: W3_E2E_TEST.e2e_items
+
+  - name: Query with filter
+    uses: w3-io/w3-sxt-action@v0
+    with:
+      command: query
+      api-key: ${{ secrets.SXT_API_KEY }}
+      schema-name: W3_E2E_TEST
+      sql: "SELECT name, value FROM W3_E2E_TEST.e2e_items WHERE value > 20"
+      resources: W3_E2E_TEST.e2e_items
+
+  # ── Cleanup — Drop the test table ─────────────────────────────────────
+
+  - name: Drop the test table
+    uses: w3-io/w3-sxt-action@v0
+    with:
+      command: ddl
+      api-key: ${{ secrets.SXT_API_KEY }}
+      schema-name: W3_E2E_TEST
+      sql: "DROP TABLE W3_E2E_TEST.e2e_items"
