@@ -31,7 +31,7 @@ jobs:
       # ── Discovery (read-only) ──────────────────────────────────────────────
 
       - name: List recent Ethereum blocks
-        uses: w3-io/w3-sxt-action@audie/sxt-login-mode
+        uses: w3-io/w3-sxt-action@v0
         with:
           command: list-chains
           user-id: ${{ secrets.SXT_USER_ID }}
@@ -44,7 +44,7 @@ jobs:
       # ── DDL — Create the test table anchored to our biscuit keypair ────────
 
       - name: Create the test table
-        uses: w3-io/w3-sxt-action@audie/sxt-login-mode
+        uses: w3-io/w3-sxt-action@v0
         with:
           command: ddl
           user-id: ${{ secrets.SXT_USER_ID }}
@@ -58,7 +58,7 @@ jobs:
       # ── DML — Insert test data ─────────────────────────────────────────────
 
       - name: Insert test rows
-        uses: w3-io/w3-sxt-action@audie/sxt-login-mode
+        uses: w3-io/w3-sxt-action@v0
         with:
           command: execute
           user-id: ${{ secrets.SXT_USER_ID }}
@@ -73,7 +73,7 @@ jobs:
       # ── DQL — Query the data ───────────────────────────────────────────────
 
       - name: Query all rows
-        uses: w3-io/w3-sxt-action@audie/sxt-login-mode
+        uses: w3-io/w3-sxt-action@v0
         with:
           command: query
           user-id: ${{ secrets.SXT_USER_ID }}
@@ -86,7 +86,7 @@ jobs:
           resources: W3_E2E_TEST.e2e_items
 
       - name: Query with filter
-        uses: w3-io/w3-sxt-action@audie/sxt-login-mode
+        uses: w3-io/w3-sxt-action@v0
         with:
           command: query
           user-id: ${{ secrets.SXT_USER_ID }}
@@ -101,7 +101,7 @@ jobs:
       # ── Cleanup — Drop the test table ──────────────────────────────────────
 
       - name: Drop the test table
-        uses: w3-io/w3-sxt-action@audie/sxt-login-mode
+        uses: w3-io/w3-sxt-action@v0
         with:
           command: ddl
           user-id: ${{ secrets.SXT_USER_ID }}
