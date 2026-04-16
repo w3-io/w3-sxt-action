@@ -28,14 +28,29 @@ execute full CRUD operations with JWT + biscuit authentication.
 
 ## Authentication
 
-Two modes, both bootstrap a JWT session automatically:
+Three modes, resolved in this priority order. Pick the one that matches
+what you need to do.
 
-**API key (recommended for getting started):**
+**Login mode (required for writes and DDL):**
 
 ```yaml
 with:
-  api-key: ${{ secrets.SXT_API_KEY }}
+  user-id: ${{ secrets.SXT_USER_ID }}
+  password: ${{ secrets.SXT_PASSWORD }}
+  biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+  api-url: https://api.makeinfinite.dev
+  proxy-url: https://proxy.api.makeinfinite.dev
 ```
+
+The action logs in to the Make Infinite proxy with your SxT credentials,
+fetches the named biscuit via the proxy's session, and executes SQL
+against the direct endpoint at `api-url` with `Bearer <jwt>` and the
+biscuit in the request body. This is the only mode that authorizes DDL
+and DML on your own tables.
+
+Point `api-url` at `https://api.makeinfinite.dev` — the proxy's
+`/v1/sql` endpoint requires an `apikey` header even with Bearer auth
+and will reject login-mode writes with a 400.
 
 **Explicit JWT (for custom auth services):**
 
@@ -43,19 +58,57 @@ with:
 with:
   auth-url: ${{ secrets.SXT_AUTH_URL }}
   auth-secret: ${{ secrets.SXT_AUTH_SECRET }}
+  biscuit: ${{ secrets.SXT_BISCUIT }}
 ```
 
-**Biscuit authorization (for private tables):**
+The action GETs `auth-url` with an `x-shared-secret` header, uses the
+returned JWT as a bearer token, and passes any pre-fetched biscuit in
+the request body. Use this when you have a custom token service
+fronting SxT.
+
+**API key (read-only indexed chain data):**
 
 ```yaml
 with:
   api-key: ${{ secrets.SXT_API_KEY }}
-  biscuit: ${{ secrets.SXT_BISCUIT }}
 ```
 
-Biscuits are pre-signed tokens from your SxT subscription that grant
-access to specific schemas and tables. Get them from the SxT dashboard
-or `/biscuits` API endpoint.
+The action bootstraps a JWT via `/auth/apikey` on the Gateway Proxy.
+This routes SQL through the proxy which serves SxT-managed indexed
+data (`ETHEREUM.BLOCKS` and similar). **DDL and writes are not
+supported in this mode** — use login mode for those.
+
+### One-time setup for login mode
+
+Login mode requires a biscuit registered on the Make Infinite proxy.
+Biscuits are Ed25519-signed capability tokens that grant specific
+operations on specific resources; the private key that signs them
+must also be embedded in the table's `public_key=...` clause at
+create time, so a biscuit is permanently bound to its keypair.
+
+The helper at `scripts/generate-biscuit.mjs` does all of this in one
+command:
+
+```bash
+npm run generate-biscuit -- \
+  --resources=my_app.events \
+  --biscuit-name=my-app-events \
+  --user-id=$SXT_USER_ID \
+  --password=$SXT_PASSWORD
+```
+
+It generates a keypair, persists it to `.sxt-keys/` (gitignored),
+signs a biscuit granting DDL+DML+DQL on the listed resources, and
+uploads it to the proxy under the given name. The printed
+`public_key` hex must go into every `CREATE TABLE ... WITH
+"public_key=<hex>"` clause for that resource. Re-run with `--force`
+to replace an existing biscuit of the same name.
+
+Resource names must be lowercase — SxT normalizes resource
+references case-insensitively at query time, but the biscuit check is
+exact-match, so `my_app.events` in the biscuit will not authorize
+`MY_APP.EVENTS` at runtime even though the SQL resolves to the same
+table.
 
 ## Commands
 
@@ -162,27 +215,42 @@ ZK-proven queries.
     sql: 'SELECT BLOCK_NUMBER FROM BITCOIN.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 1'
 ```
 
-### Create a table and insert data
+### Create a table and insert data (login mode)
 
 ```yaml
 - name: Create log table
   uses: w3-io/w3-sxt-action@v0
   with:
     command: ddl
-    api-key: ${{ secrets.SXT_API_KEY }}
-    biscuit: ${{ secrets.SXT_BISCUIT }}
-    schema-name: MY_APP
-    sql: 'CREATE TABLE MY_APP.EVENTS (id INT, event VARCHAR, ts VARCHAR, PRIMARY KEY (id))'
+    user-id: ${{ secrets.SXT_USER_ID }}
+    password: ${{ secrets.SXT_PASSWORD }}
+    biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+    api-url: https://api.makeinfinite.dev
+    proxy-url: https://proxy.api.makeinfinite.dev
+    schema-name: my_app
+    sql: >
+      CREATE TABLE my_app.events
+      (id INT PRIMARY KEY, event VARCHAR, ts VARCHAR)
+      WITH "public_key=${{ secrets.SXT_TABLE_PUBLIC_KEY }},access_type=public_read"
 
 - name: Insert event
   uses: w3-io/w3-sxt-action@v0
   with:
     command: execute
-    api-key: ${{ secrets.SXT_API_KEY }}
-    biscuit: ${{ secrets.SXT_BISCUIT }}
-    schema-name: MY_APP
-    sql: "INSERT INTO MY_APP.EVENTS (id, event, ts) VALUES (1, 'workflow_started', '2026-03-19')"
+    user-id: ${{ secrets.SXT_USER_ID }}
+    password: ${{ secrets.SXT_PASSWORD }}
+    biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+    api-url: https://api.makeinfinite.dev
+    proxy-url: https://proxy.api.makeinfinite.dev
+    schema-name: my_app
+    sql: "INSERT INTO my_app.events (id, event, ts) VALUES (1, 'workflow_started', '2026-04-16')"
+    resources: my_app.events
 ```
+
+Both the schema and the table must exist under the biscuit's
+authority. Create the schema once out of band (any workflow step with
+`CREATE SCHEMA my_app` under the same login + biscuit will do it), then
+leave it in place.
 
 ### ERC20 token balances
 
