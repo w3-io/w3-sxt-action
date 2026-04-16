@@ -28369,11 +28369,28 @@ class SxtClient {
   }
 
   async bootstrapTokenFromApiKey() {
-    const response = await fetch(`${this.apiUrl}/auth/apikey`, {
-      method: 'POST',
-      headers: { apikey: this.apiKey, Accept: 'application/json' },
-      signal: AbortSignal.timeout(this.timeout),
-    })
+    // Bootstrapping a JWT from the api-key is an optimization to avoid
+    // sending the key on every request. Some api-keys (e.g. self-serve
+    // Studio keys) aren't eligible for the /auth/apikey flow and return
+    // 401 here — that's fine; the Gateway Proxy accepts the apikey
+    // header directly on /v1/sql, so we can skip bootstrap and let
+    // executeSql include the apikey header as the sole credential.
+    let response
+    try {
+      response = await fetch(`${this.apiUrl}/auth/apikey`, {
+        method: 'POST',
+        headers: { apikey: this.apiKey, Accept: 'application/json' },
+        signal: AbortSignal.timeout(this.timeout),
+      })
+    } catch {
+      // Network error on a non-essential bootstrap — fall back to
+      // apikey-only auth for subsequent requests.
+      return null
+    }
+
+    if (!response.ok) {
+      return null
+    }
 
     return this.parseTokenResponse(response)
   }
