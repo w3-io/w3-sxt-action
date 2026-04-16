@@ -52,7 +52,7 @@ jobs:
           command: query
           api-key: ${{ secrets.SXT_API_KEY }}
           schema-name: ETHEREUM
-          sql: "SELECT BLOCK_NUMBER, TIME_STAMP FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 3"
+          sql: 'SELECT BLOCK_NUMBER, TIME_STAMP FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 3'
           resources: ETHEREUM.BLOCKS
 
       - name: Verify query
@@ -67,7 +67,7 @@ jobs:
           command: ddl
           api-key: ${{ secrets.SXT_API_KEY }}
           schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
-          sql: "CREATE TABLE ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }} (id INT, name VARCHAR)"
+          sql: 'CREATE TABLE ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }} (id INT, name VARCHAR)'
 
       - name: Verify ddl create
         run: echo '${{ steps.ddl_create.outputs.result }}' | jq .
@@ -80,7 +80,7 @@ jobs:
           api-key: ${{ secrets.SXT_API_KEY }}
           schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
           sql: "INSERT INTO ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }} (id, name) VALUES (1, 'test')"
-          resources: "${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }}"
+          resources: '${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }}'
 
       - name: Verify execute
         run: echo '${{ steps.execute.outputs.result }}' | jq .
@@ -92,7 +92,7 @@ jobs:
           command: ddl
           api-key: ${{ secrets.SXT_API_KEY }}
           schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
-          sql: "DROP TABLE ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }}"
+          sql: 'DROP TABLE ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }}'
 
       - name: Summary
         run: |

@@ -27977,6 +27977,10 @@ function createClient() {
     authUrl: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('auth-url') || undefined,
     authSecret: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('auth-secret') || undefined,
     biscuit: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('biscuit') || undefined,
+    userId: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('user-id') || undefined,
+    password: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('password') || undefined,
+    biscuitName: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('biscuit-name') || undefined,
+    proxyUrl: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('proxy-url') || undefined,
     schemaName: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('schema-name', { required: true }),
     originApp: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('origin-app') || undefined,
     maxRetries: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('max-retries') ? Number(_actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('max-retries')) : undefined,
@@ -27984,10 +27988,10 @@ function createClient() {
     timeout: _actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('timeout') ? Number(_actions_core__WEBPACK_IMPORTED_MODULE_1__.getInput('timeout')) : undefined,
   })
 
-  if (client.authMode === 'apikey') {
+  if (client.authMode === 'jwt-apikey') {
     _actions_core__WEBPACK_IMPORTED_MODULE_1__.warning(
-      'Using API key auth (Gateway Proxy). For production, use JWT + biscuit auth ' +
-        'by providing auth-url, auth-secret, and biscuit-private-key.',
+      'Using API key auth (Gateway Proxy). DDL and writes are not supported in this mode. ' +
+        'For full read/write access, use login mode (user-id + password + biscuit-name).',
     )
   }
 
@@ -28056,19 +28060,23 @@ __webpack_async_result__();
 /**
  * Space and Time API client.
  *
- * Two auth modes:
+ * Three auth modes, resolved in priority order:
  *
- *   JWT + Biscuit (recommended):
- *     - Fetches JWT from auth-url using shared secret
- *     - Generates Ed25519-signed biscuit per query
- *     - Sends SQL with Bearer token + biscuit to direct network API
+ *   1. Login (user-id + password + biscuit-name)
+ *      - Logs in to the Make Infinite proxy with userId/password
+ *      - Uses the returned sessionId to fetch a named biscuit
+ *      - Executes SQL against api-url with Bearer JWT + biscuit
+ *      - This is the pattern dealsync uses in production
  *
- *   API Key (fallback):
- *     - Sends API key in header to Gateway Proxy
- *     - Simpler but less reliable — use for quick testing only
+ *   2. JWT via explicit auth endpoint (auth-url + auth-secret [+ biscuit])
+ *      - GET auth-url with x-shared-secret → JWT
+ *      - Caller supplies a pre-fetched biscuit string
  *
- * JWT mode is used automatically when auth-url and auth-secret are provided.
- * Falls back to API key mode otherwise.
+ *   3. API key (api-key only)
+ *      - Bootstraps a JWT via /auth/apikey
+ *      - Works against the Gateway Proxy for a limited set of operations
+ *        (typically read-only indexed chain data). DDL is not supported
+ *        in this mode — use login mode for writes.
  *
  * Designed for reuse — import this module directly if building a custom action.
  */
@@ -28126,6 +28134,10 @@ class SxtClient {
     authUrl,
     authSecret,
     biscuit,
+    userId,
+    password,
+    biscuitName,
+    proxyUrl,
     schemaName,
     originApp = 'w3-sxt-action',
     maxRetries = 3,
@@ -28134,24 +28146,31 @@ class SxtClient {
   } = {}) {
     if (!schemaName) throw new SxtError('schema-name is required', { code: 'MISSING_SCHEMA' })
 
-    // Determine auth mode
+    // Resolve auth mode: login > explicit-jwt > apikey
+    this.hasLoginAuth = Boolean(userId && password && biscuitName)
     this.hasExplicitAuth = Boolean(authUrl && authSecret)
 
-    if (!apiKey && !this.hasExplicitAuth) {
+    if (!this.hasLoginAuth && !this.hasExplicitAuth && !apiKey) {
       throw new SxtError(
-        'Authentication required: provide api-key (recommended) or auth-url + auth-secret',
+        'Authentication required: provide (user-id + password + biscuit-name), ' +
+          '(auth-url + auth-secret), or api-key',
         { code: 'MISSING_AUTH' },
       )
     }
 
     // Auth config
-    this.apiKey = apiKey
-    this.authUrl = authUrl
-    this.authSecret = authSecret
+    this.apiKey = apiKey || null
+    this.authUrl = authUrl || null
+    this.authSecret = authSecret || null
     this.biscuit = biscuit || null
+    this.userId = userId || null
+    this.password = password || null
+    this.biscuitName = biscuitName || null
 
-    // API URL
+    // URLs. api-url is where SQL runs; proxy-url is where login + biscuit
+    // lookup happens. For api-key mode both collapse to the same proxy.
     this.apiUrl = apiUrl ? apiUrl.replace(/\/+$/, '') : DEFAULT_PROXY_URL
+    this.proxyUrl = proxyUrl ? proxyUrl.replace(/\/+$/, '') : DEFAULT_PROXY_URL
 
     this.schemaName = schemaName
     this.originApp = originApp
@@ -28161,12 +28180,15 @@ class SxtClient {
 
     this.cachedToken = null
     this.tokenExpiresAt = 0
+    this.cachedSessionId = null
+    this.cachedBiscuit = null
   }
 
   /**
    * Returns which auth mode is active.
    */
   get authMode() {
+    if (this.hasLoginAuth) return 'jwt-login'
     if (this.hasExplicitAuth) return 'jwt-explicit'
     if (this.apiKey) return 'jwt-apikey'
     return 'none'
@@ -28248,15 +28270,16 @@ class SxtClient {
   async executeSql(sql, { resources, queryType } = {}) {
     const endpoint = '/v1/sql'
     const token = await this.getToken()
+    const biscuit = await this.getBiscuit()
 
     const body = {
       sqlText: sql,
-      ...(this.biscuit && { biscuits: [this.biscuit] }),
+      ...(biscuit && { biscuits: [biscuit] }),
       ...(resources?.length && { resources }),
       ...(queryType && { queryType }),
     }
 
-    // Always include API key when available (proxy requires it),
+    // Always include API key when available (proxy requires it in apikey mode),
     // plus Bearer token for JWT-authenticated requests
     const auth = {}
     if (this.apiKey) auth.apiKey = this.apiKey
@@ -28274,32 +28297,88 @@ class SxtClient {
       return this.cachedToken
     }
 
-    let response
-
-    if (this.hasExplicitAuth) {
-      // JWT via explicit auth URL + shared secret
-      response = await fetch(this.authUrl, {
-        method: 'GET',
-        headers: {
-          'x-shared-secret': this.authSecret,
-          Accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(this.timeout),
-      })
-    } else if (this.apiKey) {
-      // JWT bootstrapped from API key
-      response = await fetch(`${this.apiUrl}/auth/apikey`, {
-        method: 'POST',
-        headers: {
-          apikey: this.apiKey,
-          Accept: 'application/json',
-        },
-        signal: AbortSignal.timeout(this.timeout),
-      })
-    } else {
-      return null
+    if (this.hasLoginAuth) {
+      return this.loginViaProxy()
     }
 
+    if (this.hasExplicitAuth) {
+      return this.fetchTokenFromAuthUrl()
+    }
+
+    if (this.apiKey) {
+      return this.bootstrapTokenFromApiKey()
+    }
+
+    return null
+  }
+
+  async loginViaProxy() {
+    const response = await fetch(`${this.proxyUrl}/auth/login`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Accept: 'application/json' },
+      body: JSON.stringify({ userId: this.userId, password: this.password }),
+      signal: AbortSignal.timeout(this.timeout),
+    })
+
+    const text = await response.text()
+
+    if (!response.ok) {
+      throw new SxtError(`Login failed: ${response.status}`, {
+        status: response.status,
+        body: text,
+        code: 'AUTH_ERROR',
+      })
+    }
+
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new SxtError('Invalid login response', { body: text, code: 'AUTH_PARSE_ERROR' })
+    }
+
+    const token = data.accessToken || data.access_token
+    const sessionId = data.sessionId
+    if (!token || !sessionId) {
+      throw new SxtError('Login response missing accessToken or sessionId', {
+        body: text,
+        code: 'AUTH_NO_TOKEN',
+      })
+    }
+
+    this.cachedToken = token
+    this.cachedSessionId = sessionId
+    this.tokenExpiresAt = data.accessTokenExpires
+      ? data.accessTokenExpires - 60 * 1000
+      : Date.now() + 20 * 60 * 1000
+
+    return token
+  }
+
+  async fetchTokenFromAuthUrl() {
+    const response = await fetch(this.authUrl, {
+      method: 'GET',
+      headers: {
+        'x-shared-secret': this.authSecret,
+        Accept: 'application/json',
+      },
+      signal: AbortSignal.timeout(this.timeout),
+    })
+
+    return this.parseTokenResponse(response)
+  }
+
+  async bootstrapTokenFromApiKey() {
+    const response = await fetch(`${this.apiUrl}/auth/apikey`, {
+      method: 'POST',
+      headers: { apikey: this.apiKey, Accept: 'application/json' },
+      signal: AbortSignal.timeout(this.timeout),
+    })
+
+    return this.parseTokenResponse(response)
+  }
+
+  async parseTokenResponse(response) {
     const text = await response.text()
 
     if (!response.ok) {
@@ -28322,19 +28401,80 @@ class SxtClient {
       throw new SxtError('No token in auth response', { body: text, code: 'AUTH_NO_TOKEN' })
     }
 
-    // Cache with margin before expiry
     this.cachedToken = token
-    if (data.accessTokenExpires) {
-      this.tokenExpiresAt = data.accessTokenExpires - 60 * 1000 // 1 min margin
-    } else {
-      this.tokenExpiresAt = Date.now() + 20 * 60 * 1000 // 20 min default
-    }
+    this.tokenExpiresAt = data.accessTokenExpires
+      ? data.accessTokenExpires - 60 * 1000
+      : Date.now() + 20 * 60 * 1000
     return token
+  }
+
+  // ---------------------------------------------------------------------------
+  // Biscuit resolution — literal > named lookup > none
+  // ---------------------------------------------------------------------------
+
+  async getBiscuit() {
+    if (this.biscuit) return this.biscuit
+    if (!this.biscuitName) return null
+    if (this.cachedBiscuit) return this.cachedBiscuit
+
+    // Ensure we have a valid sessionId (login will set it if not already).
+    await this.getToken()
+    if (!this.cachedSessionId) {
+      throw new SxtError('Cannot fetch biscuit: no sessionId from login', {
+        code: 'NO_SESSION',
+      })
+    }
+
+    const response = await fetch(
+      `${this.proxyUrl}/biscuits/generated/${encodeURIComponent(this.biscuitName)}`,
+      {
+        method: 'GET',
+        headers: {
+          Accept: 'application/json',
+          sid: this.cachedSessionId,
+        },
+        signal: AbortSignal.timeout(this.timeout),
+      },
+    )
+
+    const text = await response.text()
+
+    if (!response.ok) {
+      throw new SxtError(`Biscuit fetch failed: ${response.status}`, {
+        status: response.status,
+        body: text,
+        code: 'BISCUIT_FETCH_ERROR',
+      })
+    }
+
+    let data
+    try {
+      data = JSON.parse(text)
+    } catch {
+      throw new SxtError('Invalid biscuit response', {
+        body: text,
+        code: 'BISCUIT_PARSE_ERROR',
+      })
+    }
+
+    const biscuit = data.biscuits?.[0]?.biscuit
+    if (!biscuit) {
+      throw new SxtError(`No biscuit found for name "${this.biscuitName}"`, {
+        body: text,
+        code: 'BISCUIT_NOT_FOUND',
+      })
+    }
+
+    this.cachedBiscuit = biscuit
+    return biscuit
   }
 
   invalidateToken() {
     this.cachedToken = null
     this.tokenExpiresAt = 0
+    this.cachedSessionId = null
+    // Don't drop cachedBiscuit — the biscuit is tied to the named resource,
+    // not the session, so it stays valid across re-logins.
   }
 
   detectOperation(sql) {
@@ -28370,7 +28510,8 @@ class SxtClient {
 
         if (error.status === 401 && attempt < this.maxRetries) {
           this.invalidateToken()
-          auth = { bearer: await this.getToken() }
+          const newToken = await this.getToken()
+          auth = { ...auth, bearer: newToken }
           continue
         }
 

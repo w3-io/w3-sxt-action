@@ -56,6 +56,10 @@ function createClient() {
     authUrl: core.getInput('auth-url') || undefined,
     authSecret: core.getInput('auth-secret') || undefined,
     biscuit: core.getInput('biscuit') || undefined,
+    userId: core.getInput('user-id') || undefined,
+    password: core.getInput('password') || undefined,
+    biscuitName: core.getInput('biscuit-name') || undefined,
+    proxyUrl: core.getInput('proxy-url') || undefined,
     schemaName: core.getInput('schema-name', { required: true }),
     originApp: core.getInput('origin-app') || undefined,
     maxRetries: core.getInput('max-retries') ? Number(core.getInput('max-retries')) : undefined,
@@ -63,10 +67,10 @@ function createClient() {
     timeout: core.getInput('timeout') ? Number(core.getInput('timeout')) : undefined,
   })
 
-  if (client.authMode === 'apikey') {
+  if (client.authMode === 'jwt-apikey') {
     core.warning(
-      'Using API key auth (Gateway Proxy). For production, use JWT + biscuit auth ' +
-        'by providing auth-url, auth-secret, and biscuit-private-key.',
+      'Using API key auth (Gateway Proxy). DDL and writes are not supported in this mode. ' +
+        'For full read/write access, use login mode (user-id + password + biscuit-name).',
     )
   }
 

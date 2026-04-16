@@ -336,3 +336,112 @@ describe('SxtClient: error handling', () => {
     )
   })
 })
+
+describe('SxtClient: login + biscuit-name mode', () => {
+  const loginConfig = {
+    userId: 'test-user',
+    password: 'test-pass',
+    biscuitName: 'w3-e2e-test',
+    apiUrl: 'https://sql.example.com',
+    proxyUrl: 'https://proxy.example.com',
+    schemaName: 'W3_E2E_TEST',
+  }
+
+  const LOGIN_RESPONSE = {
+    accessToken: 'login-jwt-token',
+    accessTokenExpires: Date.now() + 1800000,
+    sessionId: 'sess-abc-123',
+  }
+
+  const BISCUIT_RESPONSE = {
+    biscuits: [
+      {
+        name: 'w3-e2e-test',
+        biscuit: 'base64-biscuit-payload',
+        access: [{ resourceId: 'W3_E2E_TEST.e2e_items', supportedOperations: ['SELECT'] }],
+      },
+    ],
+  }
+
+  it('reports authMode jwt-login when user-id + password + biscuit-name given', () => {
+    const client = new SxtClient(loginConfig)
+    assert.equal(client.authMode, 'jwt-login')
+  })
+
+  it('login mode takes precedence over explicit JWT and API key', () => {
+    const client = new SxtClient({
+      ...loginConfig,
+      authUrl: 'https://auth.example.com',
+      authSecret: 'ignored',
+      apiKey: 'ignored',
+    })
+    assert.equal(client.authMode, 'jwt-login')
+  })
+
+  it('logs in, fetches biscuit by name, and executes SQL', async () => {
+    mockFetch([{ body: LOGIN_RESPONSE }, { body: BISCUIT_RESPONSE }, { body: QUERY_RESPONSE }])
+    const client = new SxtClient(loginConfig)
+
+    const result = await client.query('SELECT 1')
+
+    assert.deepEqual(result, QUERY_RESPONSE)
+    assert.equal(calls.length, 3)
+
+    // Login
+    assert.equal(calls[0].url, 'https://proxy.example.com/auth/login')
+    assert.equal(calls[0].options.method, 'POST')
+    const loginBody = JSON.parse(calls[0].options.body)
+    assert.equal(loginBody.userId, 'test-user')
+    assert.equal(loginBody.password, 'test-pass')
+
+    // Biscuit fetch
+    assert.equal(calls[1].url, 'https://proxy.example.com/biscuits/generated/w3-e2e-test')
+    assert.equal(calls[1].options.method, 'GET')
+    assert.equal(calls[1].options.headers.sid, 'sess-abc-123')
+
+    // SQL
+    assert.match(calls[2].url, /^https:\/\/sql\.example\.com\/v1\/sql/)
+    const sqlBody = JSON.parse(calls[2].options.body)
+    assert.equal(sqlBody.sqlText, 'SELECT 1')
+    assert.deepEqual(sqlBody.biscuits, ['base64-biscuit-payload'])
+    assert.equal(calls[2].options.headers.Authorization, 'Bearer login-jwt-token')
+  })
+
+  it('caches session and biscuit across multiple queries', async () => {
+    mockFetch([
+      { body: LOGIN_RESPONSE },
+      { body: BISCUIT_RESPONSE },
+      { body: QUERY_RESPONSE },
+      { body: QUERY_RESPONSE },
+    ])
+    const client = new SxtClient(loginConfig)
+
+    await client.query('SELECT 1')
+    await client.query('SELECT 2')
+
+    // 4 calls only: 1 login + 1 biscuit + 2 SQL
+    assert.equal(calls.length, 4)
+  })
+
+  it('surfaces biscuit-not-found with a clear error', async () => {
+    mockFetch([{ body: LOGIN_RESPONSE }, { status: 404, body: { detail: 'not found' } }])
+    const client = new SxtClient(loginConfig)
+
+    await assert.rejects(
+      () => client.query('SELECT 1'),
+      (err) => err instanceof SxtError && err.code === 'BISCUIT_FETCH_ERROR',
+    )
+  })
+
+  it('uses a literal biscuit input when both biscuit and biscuit-name are provided', async () => {
+    mockFetch([{ body: LOGIN_RESPONSE }, { body: QUERY_RESPONSE }])
+    const client = new SxtClient({ ...loginConfig, biscuit: 'literal-biscuit' })
+
+    await client.query('SELECT 1')
+
+    // Only 2 calls: login + SQL. No biscuit fetch because a literal was supplied.
+    assert.equal(calls.length, 2)
+    const body = JSON.parse(calls[1].options.body)
+    assert.deepEqual(body.biscuits, ['literal-biscuit'])
+  })
+})
