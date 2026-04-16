@@ -2,8 +2,14 @@ name: Test SxT Action
 
 on:
   workflow_dispatch:
+  # Run on tag pushes (e.g. v0 retag) to validate the published ref.
   push:
-    branches: [audie/*]
+    tags: ['v*']
+  # Weekly smoke test catches silent upstream drift from SxT or Make
+  # Infinite without churning the account on every commit. Unit tests
+  # in ci.yml already cover code regressions per push.
+  schedule:
+    - cron: '0 12 * * 1'
 
 # Serialize the writes job across all runs — the login-mode job uses
 # a fixed table name because the biscuit is scoped to that exact
