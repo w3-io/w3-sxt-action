@@ -313,6 +313,25 @@ describe('SxtClient: API key JWT bootstrap mode', () => {
     // 3 calls: 1 auth bootstrap + 2 SQL queries
     assert.equal(calls.length, 3)
   })
+
+  it('falls back to apikey-only auth when /auth/apikey returns 401', async () => {
+    // Some api-keys aren't eligible for JWT bootstrap. The Gateway
+    // Proxy still accepts the apikey header on /v1/sql, so we should
+    // degrade gracefully rather than failing the request.
+    mockFetch([{ status: 401, body: 'Unauthorized' }, { body: QUERY_RESPONSE }])
+    const client = new SxtClient(apiKeyConfig)
+
+    const result = await client.query('SELECT 1')
+
+    assert.deepEqual(result, QUERY_RESPONSE)
+    // 2 calls: failed bootstrap + successful SQL with apikey header
+    assert.equal(calls.length, 2)
+    assert.match(calls[0].url, /\/auth\/apikey/)
+    assert.match(calls[1].url, /\/v1\/sql/)
+    assert.equal(calls[1].options.headers.apikey, 'test-api-key')
+    // No Bearer token — we never got one
+    assert.equal(calls[1].options.headers.Authorization, undefined)
+  })
 })
 
 describe('SxtClient: error handling', () => {
