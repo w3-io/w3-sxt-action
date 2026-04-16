@@ -4,7 +4,13 @@
 
 ## Prerequisites
 
-| Credential                 | Env var                | Source                                   |
+The env var names below are the ones this repo's own E2E workflow
+(`e2e.yaml`) reads. They are not requirements imposed by the action
+itself — in your own workflows, name the secrets whatever you like.
+The fixed contract is the action-input names (`user-id`, `password`,
+`biscuit-name`, `biscuit`, `api-url`, `proxy-url`, `api-key`).
+
+| Credential                 | Env var (as used here) | Source                                   |
 | -------------------------- | ---------------------- | ---------------------------------------- |
 | SxT userId (email)         | `SXT_USER_ID`          | SxT account                              |
 | SxT password               | `SXT_PASSWORD`         | SxT account                              |

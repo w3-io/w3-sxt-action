@@ -92,6 +92,14 @@ Paste the printed `public_key` hex into `SXT_TABLE_PUBLIC_KEY` and the name into
 
 ## Authentication
 
+The secret names shown above (`SXT_USER_ID`, `SXT_PASSWORD`,
+`SXT_BISCUIT_NAME`, `SXT_TABLE_PUBLIC_KEY`, `SXT_API_KEY`) are
+illustrative — name your repository secrets whatever you like. The
+action-input names on the left side of `with:` (e.g. `user-id`,
+`password`, `biscuit-name`, `api-key`) are the fixed part of the
+contract; anything on the right side of `${{ secrets.… }}` is yours
+to choose.
+
 The action has three auth modes, resolved in this priority order:
 
 1. **Login** — set `user-id` + `password` + `biscuit-name`. The action logs in to the Make Infinite proxy, fetches the named biscuit, and executes SQL against `api-url` with `Bearer <jwt>` and the biscuit in the request body. This is the only path that supports DDL and writes. Point `api-url` at `https://api.makeinfinite.dev` (the direct SQL endpoint) — the proxy's `/v1/sql` requires an apikey header even with Bearer auth and will reject login-mode writes.

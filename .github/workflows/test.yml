@@ -16,6 +16,8 @@ jobs:
   reads:
     name: api-key mode — read indexed chain data
     runs-on: ubuntu-latest
+    # Skip cleanly if SXT_API_KEY isn't configured on this repo.
+    if: ${{ vars.SXT_API_KEY_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@v4
 

@@ -31,6 +31,12 @@ execute full CRUD operations with JWT + biscuit authentication.
 Three modes, resolved in this priority order. Pick the one that matches
 what you need to do.
 
+Throughout this guide, secret names like `SXT_USER_ID`, `SXT_PASSWORD`,
+and `SXT_API_KEY` are illustrative — you're free to name your repo
+secrets however you like. The fixed part of the contract is the
+action-input name on the left of `with:` (`user-id`, `password`, etc.);
+whatever appears inside `${{ secrets.… }}` is yours.
+
 **Login mode (required for writes and DDL):**
 
 ```yaml
