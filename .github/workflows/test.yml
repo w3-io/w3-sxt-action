@@ -38,17 +38,17 @@ jobs:
       - name: Verify list-chains
         run: echo '${{ steps.list_chains.outputs.result }}' | jq -e 'length > 0'
 
-      - name: list-chains (specific chain — POLYGON)
-        id: list_chains_polygon
+      - name: list-chains (specific chain — ETHEREUM)
+        id: list_chains_explicit
         uses: ./
         with:
           command: list-chains
           api-key: ${{ secrets.SXT_API_KEY }}
-          schema-name: POLYGON
-          chain: POLYGON
+          schema-name: ETHEREUM
+          chain: ETHEREUM
 
-      - name: Verify list-chains (POLYGON)
-        run: echo '${{ steps.list_chains_polygon.outputs.result }}' | jq -e 'length > 0'
+      - name: Verify list-chains (explicit)
+        run: echo '${{ steps.list_chains_explicit.outputs.result }}' | jq -e 'length > 0'
 
       - name: query
         id: query
