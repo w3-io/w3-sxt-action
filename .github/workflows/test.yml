@@ -2,20 +2,34 @@ name: Test SxT Action
 
 on:
   workflow_dispatch:
+  # Run on tag pushes (e.g. v0 retag) to validate the published ref.
   push:
-    branches: [audie/*]
+    tags: ['v*']
+  # Weekly smoke test catches silent upstream drift from SxT or Make
+  # Infinite without churning the account on every commit. Unit tests
+  # in ci.yml already cover code regressions per push.
+  schedule:
+    - cron: '0 12 * * 1'
+
+# Serialize the writes job across all runs — the login-mode job uses
+# a fixed table name because the biscuit is scoped to that exact
+# resource, so two concurrent runs would collide on CREATE TABLE.
+concurrency:
+  group: sxt-action-writes
+  cancel-in-progress: false
 
 jobs:
-  test:
+  reads:
+    name: api-key mode — read indexed chain data
     runs-on: ubuntu-latest
+    # Skip cleanly if SXT_API_KEY isn't configured on this repo.
+    if: ${{ vars.SXT_API_KEY_ENABLED == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
-      # ── Read commands ────────────────────────────────────────────────
-
-      - name: list-chains
-        uses: ./
+      - name: list-chains (default ETHEREUM)
         id: list_chains
+        uses: ./
         with:
           command: list-chains
           api-key: ${{ secrets.SXT_API_KEY }}
@@ -24,86 +38,137 @@ jobs:
       - name: Verify list-chains
         run: echo '${{ steps.list_chains.outputs.result }}' | jq -e 'length > 0'
 
-      - name: list-chains (specific chain)
-        uses: ./
+      - name: list-chains (specific chain — POLYGON)
         id: list_chains_polygon
+        uses: ./
         with:
           command: list-chains
           api-key: ${{ secrets.SXT_API_KEY }}
           schema-name: POLYGON
           chain: POLYGON
 
-      - name: Verify list-chains (specific)
+      - name: Verify list-chains (POLYGON)
         run: echo '${{ steps.list_chains_polygon.outputs.result }}' | jq -e 'length > 0'
 
-      # SKIP: SxT API does not support SHOW TABLES syntax (returns 400)
-      # - name: list-tables
-      #   uses: ./
-      #   id: list_tables
-      #   with:
-      #     command: list-tables
-      #     api-key: ${{ secrets.SXT_API_KEY }}
-      #     schema-name: ETHEREUM
-
       - name: query
-        uses: ./
         id: query
+        uses: ./
         with:
           command: query
           api-key: ${{ secrets.SXT_API_KEY }}
           schema-name: ETHEREUM
-          sql: "SELECT BLOCK_NUMBER, TIME_STAMP FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 3"
+          sql: 'SELECT BLOCK_NUMBER, TIME_STAMP FROM ETHEREUM.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 3'
           resources: ETHEREUM.BLOCKS
 
       - name: Verify query
         run: echo '${{ steps.query.outputs.result }}' | jq -e 'length > 0'
 
-      # ── Write commands ───────────────────────────────────────────────
+      # SKIP: SxT API does not support SHOW TABLES syntax (returns 400)
 
-      - name: ddl (create table)
-        uses: ./
+  writes:
+    name: login mode — full DDL/DML/DQL lifecycle
+    runs-on: ubuntu-latest
+    # Skip cleanly if the login-mode secrets aren't configured on this repo.
+    if: ${{ vars.SXT_LOGIN_MODE_ENABLED == 'true' }}
+    env:
+      # Fixed table name — the biscuit is scoped to exactly this resource,
+      # so the whole workflow serializes via the concurrency group above.
+      TABLE: w3_e2e_test.e2e_items
+      PUB_KEY: ${{ secrets.SXT_TABLE_PUBLIC_KEY }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: ddl — create table
         id: ddl_create
+        uses: ./
         with:
           command: ddl
-          api-key: ${{ secrets.SXT_API_KEY }}
-          schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
-          sql: "CREATE TABLE ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }} (id INT, name VARCHAR)"
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          api-url: ${{ secrets.SXT_API_URL }}
+          proxy-url: ${{ secrets.SXT_PROXY_URL }}
+          schema-name: w3_e2e_test
+          sql: 'CREATE TABLE w3_e2e_test.e2e_items (id INT PRIMARY KEY, name VARCHAR, value DECIMAL(18,2)) WITH "public_key=${{ secrets.SXT_TABLE_PUBLIC_KEY }},access_type=public_read"'
 
-      - name: Verify ddl create
-        run: echo '${{ steps.ddl_create.outputs.result }}' | jq .
-
-      - name: execute (insert)
-        uses: ./
+      - name: execute — insert rows
         id: execute
+        uses: ./
         with:
           command: execute
-          api-key: ${{ secrets.SXT_API_KEY }}
-          schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
-          sql: "INSERT INTO ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }} (id, name) VALUES (1, 'test')"
-          resources: "${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }}"
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          api-url: ${{ secrets.SXT_API_URL }}
+          proxy-url: ${{ secrets.SXT_PROXY_URL }}
+          schema-name: w3_e2e_test
+          sql: "INSERT INTO w3_e2e_test.e2e_items (id, name, value) VALUES (1, 'alpha', 10.50), (2, 'beta', 25.00), (3, 'gamma', 42.99)"
+          resources: w3_e2e_test.e2e_items
 
-      - name: Verify execute
-        run: echo '${{ steps.execute.outputs.result }}' | jq .
+      - name: Verify insert
+        run: echo '${{ steps.execute.outputs.result }}' | jq -e '.[0].UPDATED == 3'
 
-      - name: ddl (drop table cleanup)
+      - name: query — select all
+        id: query_all
         uses: ./
-        id: ddl_drop
+        with:
+          command: query
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          api-url: ${{ secrets.SXT_API_URL }}
+          proxy-url: ${{ secrets.SXT_PROXY_URL }}
+          schema-name: w3_e2e_test
+          sql: 'SELECT * FROM w3_e2e_test.e2e_items ORDER BY id'
+          resources: w3_e2e_test.e2e_items
+
+      - name: Verify query (all rows)
+        run: echo '${{ steps.query_all.outputs.result }}' | jq -e 'length == 3'
+
+      - name: query — select with filter
+        id: query_filter
+        uses: ./
+        with:
+          command: query
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          api-url: ${{ secrets.SXT_API_URL }}
+          proxy-url: ${{ secrets.SXT_PROXY_URL }}
+          schema-name: w3_e2e_test
+          sql: 'SELECT name, value FROM w3_e2e_test.e2e_items WHERE value > 20'
+          resources: w3_e2e_test.e2e_items
+
+      - name: Verify query (filter)
+        run: echo '${{ steps.query_filter.outputs.result }}' | jq -e 'length == 2'
+
+      # Always drop the table even if an earlier step failed, so the next
+      # run isn't blocked by a leftover table on the fixed name.
+      - name: ddl — drop table (cleanup)
+        if: always()
+        uses: ./
         with:
           command: ddl
-          api-key: ${{ secrets.SXT_API_KEY }}
-          schema-name: ${{ secrets.SXT_TEST_SCHEMA }}
-          sql: "DROP TABLE ${{ secrets.SXT_TEST_SCHEMA }}.E2E_TEST_${{ github.run_id }}"
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          api-url: ${{ secrets.SXT_API_URL }}
+          proxy-url: ${{ secrets.SXT_PROXY_URL }}
+          schema-name: w3_e2e_test
+          sql: 'DROP TABLE w3_e2e_test.e2e_items'
 
+  summary:
+    needs: [reads, writes]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
       - name: Summary
         run: |
-          echo "### SxT Action Test Results" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "| Command | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| list-chains | pass |" >> $GITHUB_STEP_SUMMARY
-          echo "| list-chains (specific) | pass |" >> $GITHUB_STEP_SUMMARY
-          echo "| list-tables | SKIP: SxT API does not support SHOW TABLES |" >> $GITHUB_STEP_SUMMARY
-          echo "| query | pass |" >> $GITHUB_STEP_SUMMARY
-          echo "| ddl (create) | pass |" >> $GITHUB_STEP_SUMMARY
-          echo "| execute (insert) | pass |" >> $GITHUB_STEP_SUMMARY
-          echo "| ddl (drop) | pass |" >> $GITHUB_STEP_SUMMARY
+          {
+            echo "### SxT Action Test Results"
+            echo
+            echo "| Mode | Status |"
+            echo "|------|--------|"
+            echo "| api-key reads | ${{ needs.reads.result }} |"
+            echo "| login-mode writes | ${{ needs.writes.result }} |"
+          } >> $GITHUB_STEP_SUMMARY

@@ -11,6 +11,7 @@
     "lint": "eslint src/",
     "test": "node --test test/*.test.js",
     "build": "ncc build src/index.js -o dist",
+    "generate-biscuit": "node scripts/generate-biscuit.mjs",
     "all": "npm run format && npm run lint && npm run test && npm run build"
   },
   "dependencies": {
@@ -21,6 +22,7 @@
     "@eslint/js": "^9.39.4",
     "@vercel/ncc": "^0.38.4",
     "eslint": "^9.0.0",
-    "prettier": "^3.4.0"
+    "prettier": "^3.4.0",
+    "sxt-nodejs-sdk": "^2.1.5"
   }
 }

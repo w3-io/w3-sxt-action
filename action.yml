@@ -7,24 +7,38 @@ inputs:
     description: 'Operation: query, execute, ddl, list-tables, list-chains'
     required: true
 
-  # Authentication — JWT + Biscuit (recommended)
-  # If auth-url and auth-secret are provided, JWT mode is used.
-  # Falls back to API key mode if only api-key is provided.
+  # Authentication — three modes, resolved in this priority order:
+  #   1. Login mode:    user-id + password + biscuit-name (recommended for writes)
+  #   2. Explicit JWT:  auth-url + auth-secret (+ optional biscuit)
+  #   3. API key:       api-key (read-only indexed chain data via Gateway Proxy)
   api-url:
-    description: 'SxT API base URL (direct network for JWT, proxy for API key)'
+    description: 'SxT API base URL where SQL is executed'
+    required: false
+    default: 'https://proxy.api.makeinfinite.dev'
+  proxy-url:
+    description: 'Make Infinite proxy base URL for login and biscuit lookup'
     required: false
     default: 'https://proxy.api.makeinfinite.dev'
   api-key:
-    description: 'SxT API key (bootstraps JWT session automatically)'
+    description: 'SxT API key (Gateway Proxy, read-only indexed data)'
     required: false
   auth-url:
-    description: 'Custom JWT token endpoint URL (alternative to API key)'
+    description: 'Custom JWT token endpoint URL (alternative to api-key)'
     required: false
   auth-secret:
     description: 'Shared secret for custom JWT endpoint'
     required: false
+  user-id:
+    description: 'SxT userId for proxy login (enables DDL/DML via biscuit-name)'
+    required: false
+  password:
+    description: 'SxT password for proxy login'
+    required: false
+  biscuit-name:
+    description: 'Name of a biscuit registered on the proxy, fetched at runtime'
+    required: false
   biscuit:
-    description: 'Pre-signed biscuit token for table-level authorization (from SxT subscription)'
+    description: 'Pre-fetched biscuit token string (alternative to biscuit-name)'
     required: false
 
   # Shared config
