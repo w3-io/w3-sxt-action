@@ -28125,6 +28125,7 @@ __webpack_async_result__();
  * Designed for reuse — import this module directly if building a custom action.
  */
 
+const DEFAULT_API_URL = 'https://api.makeinfinite.dev'
 const DEFAULT_PROXY_URL = 'https://proxy.api.makeinfinite.dev'
 
 /**
@@ -28211,9 +28212,12 @@ class SxtClient {
     this.password = password || null
     this.biscuitName = biscuitName || null
 
-    // URLs. api-url is where SQL runs; proxy-url is where login + biscuit
-    // lookup happens. For api-key mode both collapse to the same proxy.
-    this.apiUrl = apiUrl ? apiUrl.replace(/\/+$/, '') : DEFAULT_PROXY_URL
+    // URLs. api-url is where SQL and discovery run; proxy-url is where
+    // login + biscuit lookup happens. In api-key-only mode, SQL goes
+    // through the proxy (the direct API requires a JWT).
+    const defaultApiUrl =
+      this.hasLoginAuth || this.hasExplicitAuth ? DEFAULT_API_URL : DEFAULT_PROXY_URL
+    this.apiUrl = apiUrl ? apiUrl.replace(/\/+$/, '') : defaultApiUrl
     this.proxyUrl = proxyUrl ? proxyUrl.replace(/\/+$/, '') : DEFAULT_PROXY_URL
 
     this.schemaName = schemaName
@@ -28295,7 +28299,7 @@ class SxtClient {
   async discoverSchemas() {
     const token = await this.getToken()
     const auth = this.buildAuth(token)
-    return this.requestWithRetry('GET', '/v1/discover/schema', null, auth)
+    return this.requestWithRetry('GET', '/v2/discover/schema', null, auth)
   }
 
   /**
@@ -28311,7 +28315,7 @@ class SxtClient {
     const auth = this.buildAuth(token)
     return this.requestWithRetry(
       'GET',
-      `/v1/discover/table?schema=${encodeURIComponent(s)}`,
+      `/v2/discover/table?scope=ALL&schema=${encodeURIComponent(s)}`,
       null,
       auth,
     )
@@ -28333,7 +28337,7 @@ class SxtClient {
     const auth = this.buildAuth(token)
     return this.requestWithRetry(
       'GET',
-      `/v1/discover/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/column`,
+      `/v2/discover/table/column?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`,
       null,
       auth,
     )
@@ -28355,7 +28359,7 @@ class SxtClient {
     const auth = this.buildAuth(token)
     return this.requestWithRetry(
       'GET',
-      `/v1/discover/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/primaryKey`,
+      `/v2/discover/table/primarykey?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`,
       null,
       auth,
     )
@@ -28377,7 +28381,7 @@ class SxtClient {
     const auth = this.buildAuth(token)
     return this.requestWithRetry(
       'GET',
-      `/v1/discover/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/index`,
+      `/v2/discover/table/index?schema=${encodeURIComponent(schema)}&table=${encodeURIComponent(table)}`,
       null,
       auth,
     )
@@ -28399,7 +28403,7 @@ class SxtClient {
     const auth = this.buildAuth(token)
     return this.requestWithRetry(
       'GET',
-      `/v1/discover/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/relationship`,
+      `/v2/discover/table/relations?schema=${encodeURIComponent(schema)}&scope=ALL`,
       null,
       auth,
     )
@@ -28683,12 +28687,12 @@ class SxtClient {
   // HTTP with retry
   // ---------------------------------------------------------------------------
 
-  async requestWithRetry(method, path, body, auth) {
+  async requestWithRetry(method, path, body, auth, baseUrl) {
     let lastError
 
     for (let attempt = 0; attempt <= this.maxRetries; attempt++) {
       try {
-        return await this.request(method, path, body, auth)
+        return await this.request(method, path, body, auth, baseUrl)
       } catch (error) {
         lastError = error
 
@@ -28716,8 +28720,8 @@ class SxtClient {
     throw lastError
   }
 
-  async request(method, path, body, auth) {
-    const url = `${this.apiUrl}${path}`
+  async request(method, path, body, auth, baseUrl) {
+    const url = `${baseUrl || this.apiUrl}${path}`
     const headers = {
       'Content-Type': 'application/json',
       Accept: 'application/json',
