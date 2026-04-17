@@ -8,15 +8,15 @@ Exposing them as action commands lets workflows introspect what's
 there before issuing queries — useful for codegen, health checks, and
 "describe this schema" steps.
 
-- [ ] `discover-schemas` — list all schemas visible to the caller
-- [ ] `discover-tables` — list tables in a schema (supersedes the
+- [x] `discover-schemas` — list all schemas visible to the caller
+- [x] `discover-tables` — list tables in a schema (supersedes the
       non-functional `list-tables`, which relies on `SHOW TABLES` that
       SxT doesn't implement)
-- [ ] `discover-columns` — list columns for a given schema.table
-- [ ] `discover-primary-keys` — list primary-key columns
-- [ ] `discover-indexes` — list indexes for a table
-- [ ] `discover-relationships` — list foreign-key relationships
-- [ ] Remove the current non-functional `list-tables` command once
+- [x] `discover-columns` — list columns for a given schema.table
+- [x] `discover-primary-keys` — list primary-key columns
+- [x] `discover-indexes` — list indexes for a table
+- [x] `discover-relationships` — list foreign-key relationships
+- [x] Remove the current non-functional `list-tables` command once
       `discover-tables` lands
 
 Endpoints live under the same `api-url` the SDK targets (`BASEURL_GENERAL`

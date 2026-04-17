@@ -4,7 +4,7 @@ author: 'w3-io'
 
 inputs:
   command:
-    description: 'Operation: query, execute, ddl, list-tables, list-chains'
+    description: 'Operation: query, execute, ddl, list-chains, discover-schemas, discover-tables, discover-columns, discover-primary-keys, discover-indexes, discover-relationships'
     required: true
 
   # Authentication — three modes, resolved in this priority order:
@@ -63,6 +63,12 @@ inputs:
     default: 'OLTP'
 
   # Discovery
+  schema:
+    description: 'Schema for discovery commands (overrides schema-name for discover-tables, discover-columns, etc.)'
+    required: false
+  table:
+    description: 'Table name for discovery commands (discover-columns, discover-primary-keys, discover-indexes, discover-relationships)'
+    required: false
   chain:
     description: 'Blockchain name for list-chains (e.g. "ethereum")'
     required: false

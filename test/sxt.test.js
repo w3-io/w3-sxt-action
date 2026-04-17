@@ -464,3 +464,145 @@ describe('SxtClient: login + biscuit-name mode', () => {
     assert.deepEqual(body.biscuits, ['literal-biscuit'])
   })
 })
+
+// ---------------------------------------------------------------------------
+// Discovery commands
+// ---------------------------------------------------------------------------
+
+describe('SxtClient: discover-schemas', () => {
+  it('calls GET /v1/discover/schema', async () => {
+    const schemas = [{ schema: 'ETHEREUM' }, { schema: 'BITCOIN' }]
+    mockFetch([{ body: AUTH_RESPONSE }, { body: schemas }])
+    const client = new SxtClient(DEFAULT_CONFIG)
+
+    const result = await client.discoverSchemas()
+
+    assert.deepEqual(result, schemas)
+    assert.equal(calls[1].options.method, 'GET')
+    assert.match(calls[1].url, /\/v1\/discover\/schema$/)
+    assert.equal(calls[1].options.body, undefined)
+  })
+})
+
+describe('SxtClient: discover-tables', () => {
+  it('calls GET /v1/discover/table?schema=...', async () => {
+    const tables = [{ tableName: 'BLOCKS' }, { tableName: 'TRANSACTIONS' }]
+    mockFetch([{ body: AUTH_RESPONSE }, { body: tables }])
+    const client = new SxtClient(DEFAULT_CONFIG)
+
+    const result = await client.discoverTables('ETHEREUM')
+
+    assert.deepEqual(result, tables)
+    assert.equal(calls[1].options.method, 'GET')
+    assert.match(calls[1].url, /\/v1\/discover\/table\?schema=ETHEREUM$/)
+  })
+
+  it('defaults to schemaName when no schema arg provided', async () => {
+    mockFetch([{ body: AUTH_RESPONSE }, { body: [] }])
+    const client = new SxtClient(DEFAULT_CONFIG)
+
+    await client.discoverTables()
+
+    assert.match(calls[1].url, /\/v1\/discover\/table\?schema=testschema$/)
+  })
+
+  it('rejects invalid schema identifier', async () => {
+    const client = new SxtClient(DEFAULT_CONFIG)
+    await assert.rejects(
+      () => client.discoverTables('bad schema!'),
+      (err) => err instanceof SxtError && err.code === 'SQL_VALIDATION',
+    )
+  })
+})
+
+describe('SxtClient: discover-columns', () => {
+  it('calls GET /v1/discover/table/{schema}/{table}/column', async () => {
+    const columns = [{ columnName: 'BLOCK_NUMBER', type: 'BIGINT' }]
+    mockFetch([{ body: AUTH_RESPONSE }, { body: columns }])
+    const client = new SxtClient(DEFAULT_CONFIG)
+
+    const result = await client.discoverColumns('ETHEREUM', 'BLOCKS')
+
+    assert.deepEqual(result, columns)
+    assert.match(calls[1].url, /\/v1\/discover\/table\/ETHEREUM\/BLOCKS\/column$/)
+  })
+
+  it('requires schema', async () => {
+    const client = new SxtClient(DEFAULT_CONFIG)
+    await assert.rejects(
+      () => client.discoverColumns('', 'BLOCKS'),
+      (err) => err instanceof SxtError && err.code === 'MISSING_SCHEMA',
+    )
+  })
+
+  it('requires table', async () => {
+    const client = new SxtClient(DEFAULT_CONFIG)
+    await assert.rejects(
+      () => client.discoverColumns('ETHEREUM', ''),
+      (err) => err instanceof SxtError && err.code === 'MISSING_TABLE',
+    )
+  })
+})
+
+describe('SxtClient: discover-primary-keys', () => {
+  it('calls GET /v1/discover/table/{schema}/{table}/primaryKey', async () => {
+    const pks = [{ columnName: 'BLOCK_NUMBER' }]
+    mockFetch([{ body: AUTH_RESPONSE }, { body: pks }])
+    const client = new SxtClient(DEFAULT_CONFIG)
+
+    const result = await client.discoverPrimaryKeys('ETHEREUM', 'BLOCKS')
+
+    assert.deepEqual(result, pks)
+    assert.match(calls[1].url, /\/v1\/discover\/table\/ETHEREUM\/BLOCKS\/primaryKey$/)
+  })
+
+  it('requires schema and table', async () => {
+    const client = new SxtClient(DEFAULT_CONFIG)
+    await assert.rejects(
+      () => client.discoverPrimaryKeys('', 'BLOCKS'),
+      (err) => err.code === 'MISSING_SCHEMA',
+    )
+    await assert.rejects(
+      () => client.discoverPrimaryKeys('ETHEREUM', ''),
+      (err) => err.code === 'MISSING_TABLE',
+    )
+  })
+})
+
+describe('SxtClient: discover-indexes', () => {
+  it('calls GET /v1/discover/table/{schema}/{table}/index', async () => {
+    const indexes = [{ indexName: 'pk_blocks', columns: ['BLOCK_NUMBER'] }]
+    mockFetch([{ body: AUTH_RESPONSE }, { body: indexes }])
+    const client = new SxtClient(DEFAULT_CONFIG)
+
+    const result = await client.discoverIndexes('ETHEREUM', 'BLOCKS')
+
+    assert.deepEqual(result, indexes)
+    assert.match(calls[1].url, /\/v1\/discover\/table\/ETHEREUM\/BLOCKS\/index$/)
+  })
+})
+
+describe('SxtClient: discover-relationships', () => {
+  it('calls GET /v1/discover/table/{schema}/{table}/relationship', async () => {
+    const rels = [{ fkTable: 'TRANSACTIONS', pkTable: 'BLOCKS' }]
+    mockFetch([{ body: AUTH_RESPONSE }, { body: rels }])
+    const client = new SxtClient(DEFAULT_CONFIG)
+
+    const result = await client.discoverRelationships('ETHEREUM', 'BLOCKS')
+
+    assert.deepEqual(result, rels)
+    assert.match(calls[1].url, /\/v1\/discover\/table\/ETHEREUM\/BLOCKS\/relationship$/)
+  })
+
+  it('requires schema and table', async () => {
+    const client = new SxtClient(DEFAULT_CONFIG)
+    await assert.rejects(
+      () => client.discoverRelationships('', 'BLOCKS'),
+      (err) => err.code === 'MISSING_SCHEMA',
+    )
+    await assert.rejects(
+      () => client.discoverRelationships('ETHEREUM', ''),
+      (err) => err.code === 'MISSING_TABLE',
+    )
+  })
+})

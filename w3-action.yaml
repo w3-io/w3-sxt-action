@@ -57,13 +57,96 @@ commands:
         type: object
         description: '{success: true}'
 
-  - name: list-tables
-    description: List tables in the configured schema.
+  - name: discover-schemas
+    description: >
+      List all schemas visible to the caller via the Discovery API.
     inputs: {}
     outputs:
       result:
         type: array
+        description: Schema metadata
+
+  - name: discover-tables
+    description: >
+      List tables in a schema via the Discovery API. Defaults to
+      schema-name if schema input is not provided.
+    inputs:
+      schema:
+        type: string
+        required: false
+        description: Schema name (defaults to schema-name)
+    outputs:
+      result:
+        type: array
         description: Table metadata
+
+  - name: discover-columns
+    description: >
+      List columns for a table via the Discovery API.
+    inputs:
+      schema:
+        type: string
+        required: false
+        description: Schema name (defaults to schema-name)
+      table:
+        type: string
+        required: true
+        description: Table name
+    outputs:
+      result:
+        type: array
+        description: Column metadata
+
+  - name: discover-primary-keys
+    description: >
+      List primary-key columns for a table via the Discovery API.
+    inputs:
+      schema:
+        type: string
+        required: false
+        description: Schema name (defaults to schema-name)
+      table:
+        type: string
+        required: true
+        description: Table name
+    outputs:
+      result:
+        type: array
+        description: Primary key metadata
+
+  - name: discover-indexes
+    description: >
+      List indexes for a table via the Discovery API.
+    inputs:
+      schema:
+        type: string
+        required: false
+        description: Schema name (defaults to schema-name)
+      table:
+        type: string
+        required: true
+        description: Table name
+    outputs:
+      result:
+        type: array
+        description: Index metadata
+
+  - name: discover-relationships
+    description: >
+      List foreign-key relationships for a table via the Discovery API.
+    inputs:
+      schema:
+        type: string
+        required: false
+        description: Schema name (defaults to schema-name)
+      table:
+        type: string
+        required: true
+        description: Table name
+    outputs:
+      result:
+        type: array
+        description: Relationship/foreign-key metadata
 
   - name: list-chains
     description: >

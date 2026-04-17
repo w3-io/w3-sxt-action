@@ -180,15 +180,126 @@ export class SxtClient {
     return this.executeSql(sql)
   }
 
+  // ---------------------------------------------------------------------------
+  // Discovery commands (REST-based, no SQL)
+  // ---------------------------------------------------------------------------
+
   /**
-   * List tables in the configured schema by querying system metadata.
+   * List available schemas via the Discovery API.
    *
+   * @returns {Array} Schema metadata
+   */
+  async discoverSchemas() {
+    const token = await this.getToken()
+    const auth = this.buildAuth(token)
+    return this.requestWithRetry('GET', '/v1/discover/schema', null, auth)
+  }
+
+  /**
+   * List tables in a schema via the Discovery API.
+   *
+   * @param {string} [schema] - Schema name (defaults to this.schemaName)
    * @returns {Array} Table metadata
    */
-  async listTables() {
-    validateIdentifier(this.schemaName, 'schema-name')
-    const sql = `SHOW TABLES IN ${this.schemaName}`
-    return this.executeSql(sql)
+  async discoverTables(schema) {
+    const s = schema || this.schemaName
+    validateIdentifier(s, 'schema')
+    const token = await this.getToken()
+    const auth = this.buildAuth(token)
+    return this.requestWithRetry(
+      'GET',
+      `/v1/discover/table?schema=${encodeURIComponent(s)}`,
+      null,
+      auth,
+    )
+  }
+
+  /**
+   * List columns for a table via the Discovery API.
+   *
+   * @param {string} schema - Schema name
+   * @param {string} table - Table name
+   * @returns {Array} Column metadata
+   */
+  async discoverColumns(schema, table) {
+    if (!schema) throw new SxtError('schema is required', { code: 'MISSING_SCHEMA' })
+    if (!table) throw new SxtError('table is required', { code: 'MISSING_TABLE' })
+    validateIdentifier(schema, 'schema')
+    validateIdentifier(table, 'table')
+    const token = await this.getToken()
+    const auth = this.buildAuth(token)
+    return this.requestWithRetry(
+      'GET',
+      `/v1/discover/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/column`,
+      null,
+      auth,
+    )
+  }
+
+  /**
+   * List primary-key columns for a table via the Discovery API.
+   *
+   * @param {string} schema - Schema name
+   * @param {string} table - Table name
+   * @returns {Array} Primary key metadata
+   */
+  async discoverPrimaryKeys(schema, table) {
+    if (!schema) throw new SxtError('schema is required', { code: 'MISSING_SCHEMA' })
+    if (!table) throw new SxtError('table is required', { code: 'MISSING_TABLE' })
+    validateIdentifier(schema, 'schema')
+    validateIdentifier(table, 'table')
+    const token = await this.getToken()
+    const auth = this.buildAuth(token)
+    return this.requestWithRetry(
+      'GET',
+      `/v1/discover/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/primaryKey`,
+      null,
+      auth,
+    )
+  }
+
+  /**
+   * List indexes for a table via the Discovery API.
+   *
+   * @param {string} schema - Schema name
+   * @param {string} table - Table name
+   * @returns {Array} Index metadata
+   */
+  async discoverIndexes(schema, table) {
+    if (!schema) throw new SxtError('schema is required', { code: 'MISSING_SCHEMA' })
+    if (!table) throw new SxtError('table is required', { code: 'MISSING_TABLE' })
+    validateIdentifier(schema, 'schema')
+    validateIdentifier(table, 'table')
+    const token = await this.getToken()
+    const auth = this.buildAuth(token)
+    return this.requestWithRetry(
+      'GET',
+      `/v1/discover/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/index`,
+      null,
+      auth,
+    )
+  }
+
+  /**
+   * List foreign-key relationships for a table via the Discovery API.
+   *
+   * @param {string} schema - Schema name
+   * @param {string} table - Table name
+   * @returns {Array} Relationship metadata
+   */
+  async discoverRelationships(schema, table) {
+    if (!schema) throw new SxtError('schema is required', { code: 'MISSING_SCHEMA' })
+    if (!table) throw new SxtError('table is required', { code: 'MISSING_TABLE' })
+    validateIdentifier(schema, 'schema')
+    validateIdentifier(table, 'table')
+    const token = await this.getToken()
+    const auth = this.buildAuth(token)
+    return this.requestWithRetry(
+      'GET',
+      `/v1/discover/table/${encodeURIComponent(schema)}/${encodeURIComponent(table)}/relationship`,
+      null,
+      auth,
+    )
   }
 
   /**
@@ -202,6 +313,20 @@ export class SxtClient {
     validateIdentifier(schema, 'chain')
     const sql = `SELECT BLOCK_NUMBER, TIME_STAMP FROM ${schema}.BLOCKS ORDER BY BLOCK_NUMBER DESC LIMIT 5`
     return this.executeSql(sql)
+  }
+
+  // ---------------------------------------------------------------------------
+  // Auth helpers
+  // ---------------------------------------------------------------------------
+
+  /**
+   * Build an auth object suitable for requestWithRetry.
+   */
+  buildAuth(token) {
+    const auth = {}
+    if (this.apiKey) auth.apiKey = this.apiKey
+    if (token) auth.bearer = token
+    return auth
   }
 
   // ---------------------------------------------------------------------------
@@ -222,9 +347,7 @@ export class SxtClient {
 
     // Always include API key when available (proxy requires it in apikey mode),
     // plus Bearer token for JWT-authenticated requests
-    const auth = {}
-    if (this.apiKey) auth.apiKey = this.apiKey
-    if (token) auth.bearer = token
+    const auth = this.buildAuth(token)
 
     return this.requestWithRetry('POST', endpoint, body, auth)
   }

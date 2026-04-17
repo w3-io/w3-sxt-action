@@ -1,7 +1,19 @@
 ---
 title: Space and Time
 category: integrations
-actions: [query, execute, ddl, list-tables, list-chains]
+actions:
+  [
+    query,
+    execute,
+    ddl,
+    discover-schemas,
+    discover-tables,
+    discover-columns,
+    discover-primary-keys,
+    discover-indexes,
+    discover-relationships,
+    list-chains,
+  ]
 complexity: intermediate
 ---
 
@@ -158,9 +170,81 @@ Execute DDL (CREATE TABLE, DROP TABLE, ALTER).
 
 **Output:** `{"success": true}`
 
-### list-tables
+### discover-schemas
 
-List tables in the configured schema. No inputs beyond auth config.
+List all schemas visible to the caller. No inputs beyond auth config.
+
+```yaml
+- name: List schemas
+  uses: w3-io/w3-sxt-action@v0
+  with:
+    command: discover-schemas
+    api-key: ${{ secrets.SXT_API_KEY }}
+    schema-name: ETHEREUM
+```
+
+### discover-tables
+
+List tables in a schema via the Discovery API.
+
+| Input    | Required | Description                             |
+| -------- | -------- | --------------------------------------- |
+| `schema` | no       | Schema name (defaults to `schema-name`) |
+
+```yaml
+- name: List tables in ETHEREUM schema
+  uses: w3-io/w3-sxt-action@v0
+  with:
+    command: discover-tables
+    api-key: ${{ secrets.SXT_API_KEY }}
+    schema-name: ETHEREUM
+```
+
+### discover-columns
+
+List columns for a table.
+
+| Input    | Required | Description                             |
+| -------- | -------- | --------------------------------------- |
+| `schema` | no       | Schema name (defaults to `schema-name`) |
+| `table`  | yes      | Table name                              |
+
+```yaml
+- name: Get columns for BLOCKS table
+  uses: w3-io/w3-sxt-action@v0
+  with:
+    command: discover-columns
+    api-key: ${{ secrets.SXT_API_KEY }}
+    schema-name: ETHEREUM
+    table: BLOCKS
+```
+
+### discover-primary-keys
+
+List primary-key columns for a table.
+
+| Input    | Required | Description                             |
+| -------- | -------- | --------------------------------------- |
+| `schema` | no       | Schema name (defaults to `schema-name`) |
+| `table`  | yes      | Table name                              |
+
+### discover-indexes
+
+List indexes for a table.
+
+| Input    | Required | Description                             |
+| -------- | -------- | --------------------------------------- |
+| `schema` | no       | Schema name (defaults to `schema-name`) |
+| `table`  | yes      | Table name                              |
+
+### discover-relationships
+
+List foreign-key relationships for a table.
+
+| Input    | Required | Description                             |
+| -------- | -------- | --------------------------------------- |
+| `schema` | no       | Schema name (defaults to `schema-name`) |
+| `table`  | yes      | Table name                              |
 
 ### list-chains
 

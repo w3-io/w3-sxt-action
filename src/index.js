@@ -33,11 +33,55 @@ const router = createCommandRouter({
     writeSummary('ddl', result)
   },
 
-  'list-tables': async () => {
+  'discover-schemas': async () => {
     const client = createClient()
-    const result = await client.listTables()
+    const result = await client.discoverSchemas()
     setJsonOutput('result', result)
-    writeSummary('list-tables', result)
+    writeSummary('discover-schemas', result)
+  },
+
+  'discover-tables': async () => {
+    const client = createClient()
+    const schema = core.getInput('schema') || undefined
+    const result = await client.discoverTables(schema)
+    setJsonOutput('result', result)
+    writeSummary('discover-tables', result)
+  },
+
+  'discover-columns': async () => {
+    const client = createClient()
+    const schema = core.getInput('schema') || core.getInput('schema-name', { required: true })
+    const table = core.getInput('table', { required: true })
+    const result = await client.discoverColumns(schema, table)
+    setJsonOutput('result', result)
+    writeSummary('discover-columns', result)
+  },
+
+  'discover-primary-keys': async () => {
+    const client = createClient()
+    const schema = core.getInput('schema') || core.getInput('schema-name', { required: true })
+    const table = core.getInput('table', { required: true })
+    const result = await client.discoverPrimaryKeys(schema, table)
+    setJsonOutput('result', result)
+    writeSummary('discover-primary-keys', result)
+  },
+
+  'discover-indexes': async () => {
+    const client = createClient()
+    const schema = core.getInput('schema') || core.getInput('schema-name', { required: true })
+    const table = core.getInput('table', { required: true })
+    const result = await client.discoverIndexes(schema, table)
+    setJsonOutput('result', result)
+    writeSummary('discover-indexes', result)
+  },
+
+  'discover-relationships': async () => {
+    const client = createClient()
+    const schema = core.getInput('schema') || core.getInput('schema-name', { required: true })
+    const table = core.getInput('table', { required: true })
+    const result = await client.discoverRelationships(schema, table)
+    setJsonOutput('result', result)
+    writeSummary('discover-relationships', result)
   },
 
   'list-chains': async () => {
