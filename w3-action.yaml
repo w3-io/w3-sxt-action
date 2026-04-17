@@ -3,6 +3,19 @@ partner: sxt
 name: Space and Time
 version: 1.0.0
 repo: w3-io/w3-sxt-action
+description: >
+  Space and Time decentralized SQL database with tamper-proof query
+  execution. DDL, DML, DQL, and REST discovery against indexed
+  blockchain data (Ethereum, Bitcoin, Base) and custom tables.
+context: >
+  Use SxT when the workflow needs SQL queries against blockchain
+  data or needs to store/retrieve structured data with
+  cryptographic tamper-proofing. For real-time price feeds, use
+  Pyth or Chainlink instead. Login mode (userId + password +
+  biscuit) for full DDL/DML access; api-key mode for read-only
+  indexed chain data. Discovery endpoints are on
+  api.makeinfinite.dev (v2 API). Typical: discover-tables → query
+  → execute.
 commands:
   - name: query
     description: >
