@@ -5,20 +5,16 @@
 # registered on the Make Infinite proxy and scoped to W3_E2E_TEST.e2e_items
 # with DDL/DML/DQL operations.
 #
-# Run on a local W3 network with:
-#   w3 workflow deploy test/workflows/e2e.yaml
-#   w3 workflow "sxt-e2e" trigger
+# Run locally with:
+#   w3 dev test --execute test/workflows/e2e.yaml
 #
 # Prerequisites:
-#   - W3 local network running (make dev)
 #   - Run `npm run generate-biscuit -- --resources=W3_E2E_TEST.e2e_items --biscuit-name=w3-e2e-test`
 #     to create the keypair and register the biscuit on the proxy.
-#   - Secrets exported to the network:
+#   - Secrets in environment (w3 dev test reads these automatically):
 #       SXT_USER_ID, SXT_PASSWORD — SxT account credentials
 #       SXT_BISCUIT_NAME         — e.g. "w3-e2e-test"
 #       SXT_TABLE_PUBLIC_KEY     — hex pubkey printed by generate-biscuit
-#       SXT_API_URL              — SQL endpoint (e.g. https://proxy.api.makeinfinite.dev)
-#       SXT_PROXY_URL            — Proxy endpoint for auth/biscuit lookup
 
 name: sxt-e2e
 on:
@@ -28,7 +24,67 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-      # ── Discovery (read-only) ──────────────────────────────────────────────
+      # ── Discovery (read-only, REST /v2/discover/* on api.makeinfinite.dev) ──
+
+      - name: Discover schemas
+        uses: w3-io/w3-sxt-action@v0
+        with:
+          command: discover-schemas
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          schema-name: ETHEREUM
+
+      - name: Discover tables in ETHEREUM
+        uses: w3-io/w3-sxt-action@v0
+        with:
+          command: discover-tables
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          schema-name: ETHEREUM
+
+      - name: Discover columns in ETHEREUM.BLOCKS
+        uses: w3-io/w3-sxt-action@v0
+        with:
+          command: discover-columns
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          schema-name: ETHEREUM
+          table: BLOCKS
+
+      - name: Discover primary keys in ETHEREUM.BLOCKS
+        uses: w3-io/w3-sxt-action@v0
+        with:
+          command: discover-primary-keys
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          schema-name: ETHEREUM
+          table: BLOCKS
+
+      - name: Discover indexes in ETHEREUM.BLOCKS
+        uses: w3-io/w3-sxt-action@v0
+        with:
+          command: discover-indexes
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          schema-name: ETHEREUM
+          table: BLOCKS
+
+      - name: Discover relationships in ETHEREUM
+        uses: w3-io/w3-sxt-action@v0
+        with:
+          command: discover-relationships
+          user-id: ${{ secrets.SXT_USER_ID }}
+          password: ${{ secrets.SXT_PASSWORD }}
+          biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
+          schema-name: ETHEREUM
+          table: BLOCKS
+
+      # ── SQL: read indexed chain data ───────────────────────────────────────
 
       - name: List recent Ethereum blocks
         uses: w3-io/w3-sxt-action@v0
@@ -37,8 +93,6 @@ jobs:
           user-id: ${{ secrets.SXT_USER_ID }}
           password: ${{ secrets.SXT_PASSWORD }}
           biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
-          api-url: ${{ secrets.SXT_API_URL }}
-          proxy-url: ${{ secrets.SXT_PROXY_URL }}
           schema-name: ETHEREUM
 
       # ── DDL — Create the test table anchored to our biscuit keypair ────────
@@ -50,8 +104,6 @@ jobs:
           user-id: ${{ secrets.SXT_USER_ID }}
           password: ${{ secrets.SXT_PASSWORD }}
           biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
-          api-url: ${{ secrets.SXT_API_URL }}
-          proxy-url: ${{ secrets.SXT_PROXY_URL }}
           schema-name: W3_E2E_TEST
           sql: 'CREATE TABLE W3_E2E_TEST.e2e_items (id INT PRIMARY KEY, name VARCHAR, value DECIMAL(18,2)) WITH "public_key=${{ secrets.SXT_TABLE_PUBLIC_KEY }},access_type=public_read"'
 
@@ -64,8 +116,6 @@ jobs:
           user-id: ${{ secrets.SXT_USER_ID }}
           password: ${{ secrets.SXT_PASSWORD }}
           biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
-          api-url: ${{ secrets.SXT_API_URL }}
-          proxy-url: ${{ secrets.SXT_PROXY_URL }}
           schema-name: W3_E2E_TEST
           sql: "INSERT INTO W3_E2E_TEST.e2e_items (id, name, value) VALUES (1, 'alpha', 10.50), (2, 'beta', 25.00), (3, 'gamma', 42.99)"
           resources: W3_E2E_TEST.e2e_items
@@ -79,8 +129,6 @@ jobs:
           user-id: ${{ secrets.SXT_USER_ID }}
           password: ${{ secrets.SXT_PASSWORD }}
           biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
-          api-url: ${{ secrets.SXT_API_URL }}
-          proxy-url: ${{ secrets.SXT_PROXY_URL }}
           schema-name: W3_E2E_TEST
           sql: 'SELECT * FROM W3_E2E_TEST.e2e_items ORDER BY id'
           resources: W3_E2E_TEST.e2e_items
@@ -92,8 +140,6 @@ jobs:
           user-id: ${{ secrets.SXT_USER_ID }}
           password: ${{ secrets.SXT_PASSWORD }}
           biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
-          api-url: ${{ secrets.SXT_API_URL }}
-          proxy-url: ${{ secrets.SXT_PROXY_URL }}
           schema-name: W3_E2E_TEST
           sql: 'SELECT name, value FROM W3_E2E_TEST.e2e_items WHERE value > 20'
           resources: W3_E2E_TEST.e2e_items
@@ -107,7 +153,5 @@ jobs:
           user-id: ${{ secrets.SXT_USER_ID }}
           password: ${{ secrets.SXT_PASSWORD }}
           biscuit-name: ${{ secrets.SXT_BISCUIT_NAME }}
-          api-url: ${{ secrets.SXT_API_URL }}
-          proxy-url: ${{ secrets.SXT_PROXY_URL }}
           schema-name: W3_E2E_TEST
           sql: 'DROP TABLE W3_E2E_TEST.e2e_items'

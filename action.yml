@@ -12,9 +12,8 @@ inputs:
   #   2. Explicit JWT:  auth-url + auth-secret (+ optional biscuit)
   #   3. API key:       api-key (read-only indexed chain data via Gateway Proxy)
   api-url:
-    description: 'SxT API base URL where SQL is executed'
+    description: 'SxT API base URL for SQL and discovery (default: api.makeinfinite.dev for login/JWT mode, proxy for api-key mode)'
     required: false
-    default: 'https://proxy.api.makeinfinite.dev'
   proxy-url:
     description: 'Make Infinite proxy base URL for login and biscuit lookup'
     required: false
