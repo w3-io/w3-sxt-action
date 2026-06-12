@@ -80,6 +80,24 @@ export function escapeSqlString(value) {
   return s.replace(/'/g, "''")
 }
 
+/**
+ * Build the schema-qualified `<schema>.ENTITY_VERSIONS` table reference, validating
+ * `schema-name` as a plain SQL identifier first. The schema is interpolated as an
+ * IDENTIFIER (not a quoted literal, so value-escaping does not apply), and it comes
+ * from a workflow input — so a malformed/hostile `schema-name` must be rejected
+ * rather than risk identifier injection or a broken query.
+ */
+function qualifiedTable(client) {
+  const schema = client.schemaName
+  if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(schema || '')) {
+    throw new StateError(
+      `invalid schema-name "${schema}" (letters, digits, underscore; must not start with a digit)`,
+      ErrorCode.INVALID_INPUT,
+    )
+  }
+  return `${schema}.${STATE_TABLE}`
+}
+
 /** Require a non-empty string key component (tenant-id / entity-type / id). */
 function requireKey(value, label) {
   if (value === undefined || value === null || String(value).length === 0) {
@@ -144,7 +162,7 @@ function mapClientError(error) {
  * @private
  */
 async function readLatest(client, { tenant, entityType, id }) {
-  const table = `${client.schemaName}.${STATE_TABLE}`
+  const table = qualifiedTable(client)
   const sql =
     `SELECT VERSION, FIELDS FROM ${table} ` +
     `WHERE TENANT_ID = '${tenant}' AND ENTITY_TYPE = '${entityType}' AND ID = '${id}' ` +
@@ -230,7 +248,7 @@ export async function putEntity(
   }
   const newVersion = currentVersion + 1
 
-  const table = `${client.schemaName}.${STATE_TABLE}`
+  const table = qualifiedTable(client)
   const fieldsJson = escapeSqlString(JSON.stringify(merged))
   const createdAt = Date.now()
   const sql =
@@ -283,13 +301,15 @@ export async function queryEntities(client, { tenantId, entityType, filter, sort
       : parseJsonInput(sort, 'sort', { allow: 'array' })
   const cap = resolveLimit(limit)
 
-  const table = `${client.schemaName}.${STATE_TABLE}`
+  const table = qualifiedTable(client)
   // Latest version per id, tenant + type scoped, via a ROW_NUMBER window.
+  // The derived table is given an explicit alias (`latest`) — SxT tolerates an
+  // unaliased subquery, but standard SQL (and engines like Postgres) require one.
   const sql =
     `SELECT ID, FIELDS, VERSION FROM (` +
     `SELECT ID, FIELDS, VERSION, ROW_NUMBER() OVER (PARTITION BY ID ORDER BY VERSION DESC) AS RN ` +
     `FROM ${table} WHERE TENANT_ID = '${tenant}' AND ENTITY_TYPE = '${type}'` +
-    `) WHERE RN = 1`
+    `) AS latest WHERE RN = 1`
 
   let rows
   try {
