@@ -1,6 +1,14 @@
 import { createCommandRouter, setJsonOutput, handleError } from '@w3-io/action-core'
 import * as core from '@actions/core'
 import { SxtClient, SxtError } from './sxt.js'
+import {
+  putEntity,
+  getEntity,
+  queryEntities,
+  transaction,
+  objectStore,
+  StateError,
+} from './state.js'
 
 const router = createCommandRouter({
   query: async () => {
@@ -91,6 +99,56 @@ const router = createCommandRouter({
     setJsonOutput('result', result)
     writeSummary('list-chains', result)
   },
+
+  // -------------------------------------------------------------------------
+  // State entity commands (Story 1.1) — append-only versioned entities.
+  // Inputs are kebab-case; results are JSON parsed by callers via
+  // fromJSON(steps.X.outputs.result).<field>. Key/field validation and typed
+  // errors live in ./state.js (empty inputs are not core.getInput-`required`
+  // so they surface as a typed INVALID_INPUT rather than a generic failure).
+  // -------------------------------------------------------------------------
+  'put-entity': async () => {
+    const client = createClient()
+    const result = await putEntity(client, {
+      tenantId: core.getInput('tenant-id'),
+      entityType: core.getInput('entity-type'),
+      id: core.getInput('id'),
+      fields: core.getInput('fields'),
+      expectedVersion: core.getInput('expected-version') || undefined,
+    })
+    setJsonOutput('result', result)
+    writeSummary('put-entity', [result.entity])
+  },
+
+  'get-entity': async () => {
+    const client = createClient()
+    const result = await getEntity(client, {
+      tenantId: core.getInput('tenant-id'),
+      entityType: core.getInput('entity-type'),
+      id: core.getInput('id'),
+    })
+    setJsonOutput('result', result)
+    writeSummary('get-entity', result.entity ? [result.entity] : result)
+  },
+
+  'query-entities': async () => {
+    const client = createClient()
+    const result = await queryEntities(client, {
+      tenantId: core.getInput('tenant-id'),
+      entityType: core.getInput('entity-type'),
+      filter: core.getInput('filter') || undefined,
+      sort: core.getInput('sort') || undefined,
+      limit: core.getInput('limit') || undefined,
+    })
+    setJsonOutput('result', result)
+    writeSummary('query-entities', result)
+  },
+
+  // SxT has no multi-entity transaction; object storage is the cloud: syscall
+  // (Storj, Story 1.2) — both raise the typed NOT_SUPPORTED.
+  transaction: async () => transaction(),
+  'object-store-put': async () => objectStore('object-store-put'),
+  'object-store-get': async () => objectStore('object-store-get'),
 })
 
 function createClient() {
@@ -156,7 +214,12 @@ function writeSummary(command, result) {
 try {
   await router()
 } catch (error) {
-  if (error instanceof SxtError) {
+  if (error instanceof StateError) {
+    // Typed state errors surface the repo vocabulary on `error-code` plus a
+    // `[CODE] message` failure so dispatchers can branch on the code.
+    core.setOutput('error-code', error.code)
+    core.setFailed(`[${error.code}] ${error.message}`)
+  } else if (error instanceof SxtError) {
     core.setFailed(`SxT error (${error.code ?? 'UNKNOWN'}): ${error.message}`)
     if (error.body) {
       core.debug(

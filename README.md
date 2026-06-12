@@ -52,13 +52,21 @@ Paste the printed `public_key` hex into `SXT_TABLE_PUBLIC_KEY` and the name into
 
 ## Commands
 
-| Command       | Description                                    |
-| ------------- | ---------------------------------------------- |
-| `query`       | Execute a SELECT query, returns JSON rows      |
-| `execute`     | Execute DML (INSERT, UPDATE, DELETE)           |
-| `ddl`         | Execute DDL (CREATE TABLE, DROP TABLE, ALTER)  |
-| `list-tables` | (not supported — SxT has no `SHOW TABLES`)     |
-| `list-chains` | Query latest blocks from an indexed blockchain |
+| Command            | Description                                                 |
+| ------------------ | ----------------------------------------------------------- |
+| `query`            | Execute a SELECT query, returns JSON rows                   |
+| `execute`          | Execute DML (INSERT, UPDATE, DELETE)                        |
+| `ddl`              | Execute DDL (CREATE TABLE, DROP TABLE, ALTER)               |
+| `list-tables`      | (not supported — SxT has no `SHOW TABLES`)                  |
+| `list-chains`      | Query latest blocks from an indexed blockchain              |
+| `put-entity`       | Append a new entity version (append-only, merge + CAS)      |
+| `get-entity`       | Read the latest version of an entity by id, tenant-scoped   |
+| `query-entities`   | PostgREST-style filter/sort/limit over the latest versions  |
+| `transaction`      | NOT_SUPPORTED (SxT has no multi-entity transaction)         |
+| `object-store-*`   | NOT_SUPPORTED (object storage is the `cloud:` syscall)      |
+
+See **[docs/state-commands.md](docs/state-commands.md)** for the append-only
+entity model, the `ENTITY_VERSIONS` bootstrap DDL, seed rows, and biscuit scoping.
 
 ## Inputs
 
@@ -80,15 +88,29 @@ Paste the printed `public_key` hex into `SXT_TABLE_PUBLIC_KEY` and the name into
 | `resources`    | No       |                                      | Comma-separated table references for performance optimization    |
 | `query-type`   | No       | `OLTP`                               | Query type for DQL: `OLTP` or `OLAP`                             |
 | `chain`        | No       |                                      | Blockchain name for list-chains (e.g. `ethereum`)                |
+| `tenant-id`    | No\*     |                                      | Tenant scope for state commands (bound on every read/write)      |
+| `entity-type`  | No\*     |                                      | Entity type for state commands (e.g. `Gift`, `User`)             |
+| `id`           | No\*     |                                      | Entity id for `put-entity` / `get-entity`                        |
+| `fields`       | No\*     |                                      | JSON entity / partial patch for `put-entity`                     |
+| `expected-version` | No   |                                      | Optimistic-concurrency token for `put-entity`                    |
+| `filter`       | No       |                                      | JSON PostgREST-style filter for `query-entities`                 |
+| `sort`         | No       |                                      | JSON `[{field, direction}]` for `query-entities`                 |
+| `limit`        | No       | `50`                                 | Max rows for `query-entities` (capped at 500)                    |
 | `max-retries`  | No       | `3`                                  | Maximum retry attempts                                           |
 | `retry-delay`  | No       | `2`                                  | Base retry delay in seconds                                      |
 | `timeout`      | No       | `30`                                 | Request timeout in seconds                                       |
 
 ## Outputs
 
-| Name     | Description                  |
-| -------- | ---------------------------- |
-| `result` | JSON result of the operation |
+| Name         | Description                                                                                         |
+| ------------ | --------------------------------------------------------------------------------------------------- |
+| `result`     | JSON result of the operation                                                                        |
+| `error-code` | Typed code on failure: `NOT_SUPPORTED` / `RATE_LIMITED` / `UPSTREAM_FAILURE` / `INVALID_INPUT` / `NOT_FOUND` / `PRECONDITION_FAILED` |
+
+\* `tenant-id` / `entity-type` / `id` / `fields` are required for the state
+commands (`put-entity` / `get-entity` / `query-entities`) but not for the SQL or
+discovery commands — hence "No\*" above. Empty values raise a typed
+`INVALID_INPUT` rather than a generic failure.
 
 ## Authentication
 

@@ -4,7 +4,7 @@ author: 'w3-io'
 
 inputs:
   command:
-    description: 'Operation: query, execute, ddl, list-chains, discover-schemas, discover-tables, discover-columns, discover-primary-keys, discover-indexes, discover-relationships'
+    description: 'Operation: query, execute, ddl, list-chains, discover-schemas, discover-tables, discover-columns, discover-primary-keys, discover-indexes, discover-relationships, put-entity, get-entity, query-entities (transaction / object-store-put / object-store-get raise NOT_SUPPORTED)'
     required: true
 
   # Authentication — three modes, resolved in this priority order:
@@ -72,6 +72,33 @@ inputs:
     description: 'Blockchain name for list-chains (e.g. "ethereum")'
     required: false
 
+  # State entity commands (put-entity / get-entity / query-entities).
+  # Append-only versioned entities stored in <schema-name>.ENTITY_VERSIONS.
+  tenant-id:
+    description: 'Tenant scope, bound on every state read/write (multi-tenant isolation)'
+    required: false
+  entity-type:
+    description: 'Entity type, e.g. "Gift" | "User" | "Recipient" | "Asset" (a column value, never a table name)'
+    required: false
+  id:
+    description: 'Entity id (unique within tenant + entity-type)'
+    required: false
+  fields:
+    description: 'JSON object: the full entity, or a partial patch merged onto the latest version (put-entity)'
+    required: false
+  expected-version:
+    description: 'Optimistic-concurrency token for put-entity; if it does not match the current latest version, the command fails PRECONDITION_FAILED'
+    required: false
+  filter:
+    description: 'query-entities: JSON PostgREST-style filter, e.g. {"status":{"eq":"completed"},"amount":{"gt":100}} (operators: eq/neq/in/like/contains/gt/gte/lt/lte/is_null)'
+    required: false
+  sort:
+    description: 'query-entities: JSON array of {field, direction}, most-significant first; direction is "asc" (default) or "desc"'
+    required: false
+  limit:
+    description: 'query-entities: max rows (default 50, capped at 500)'
+    required: false
+
   # Retry configuration
   max-retries:
     description: 'Maximum retry attempts (default: 3)'
@@ -89,6 +116,8 @@ inputs:
 outputs:
   result:
     description: 'JSON result of the operation'
+  error-code:
+    description: 'Typed error code on failure: NOT_SUPPORTED | RATE_LIMITED | UPSTREAM_FAILURE | INVALID_INPUT | NOT_FOUND | PRECONDITION_FAILED'
 
 runs:
   using: 'node24'
