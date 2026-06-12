@@ -186,6 +186,13 @@ function parseFields(raw) {
  * appends a NEW version (idempotency is the orchestrator's job via a correlation
  * key — a replay is not a storage no-op).
  *
+ * NOTE: the `expectedVersion` CAS is OPTIMISTIC, not race-safe. It is a
+ * read-then-insert (SxT has no multi-statement transaction and the runtime
+ * biscuit is insert-only), so it rejects a STALE read but does not serialize
+ * concurrent writers — two puts that both read version N can both insert N+1.
+ * Acceptable for the v0 single-broker path; closing the window needs a unique
+ * index on (TENANT_ID, ENTITY_TYPE, ID, VERSION) so the loser's INSERT fails.
+ *
  * @returns {Promise<{entity: object, version: number}>}
  */
 export async function putEntity(
@@ -326,20 +333,26 @@ function resolveLimit(limit) {
   return Math.min(n, MAX_LIMIT)
 }
 
-/** Coerce two operands to numbers when both look numeric, for ordered/equality compares. */
+/** A string that is a clean decimal number — no hex, no whitespace, no '', no exponent. */
+function isNumericString(v) {
+  return typeof v === 'string' && /^-?\d+(\.\d+)?$/.test(v)
+}
+
+/**
+ * Coerce two operands to numbers ONLY when each is a number or a clean numeric
+ * string (so the intended `"100"` ↔ `100` match works). Deliberately does NOT
+ * coerce booleans, arrays/objects, hex (`"0x10"`), whitespace-padded (`" 5 "`),
+ * or exponent strings — those would silently cross-type-match (e.g. `eq: 1`
+ * matching a stored `true`, or `eq: 0` matching `[]`). Returns null when either
+ * side isn't cleanly numeric, leaving callers to fall back to strict compare.
+ */
 function coerceNum(a, b) {
+  const okA = typeof a === 'number' || isNumericString(a)
+  const okB = typeof b === 'number' || isNumericString(b)
+  if (!okA || !okB) return null
   const na = typeof a === 'number' ? a : Number(a)
   const nb = typeof b === 'number' ? b : Number(b)
-  if (
-    Number.isFinite(na) &&
-    Number.isFinite(nb) &&
-    a !== null &&
-    b !== null &&
-    a !== '' &&
-    b !== ''
-  ) {
-    return [na, nb]
-  }
+  if (Number.isFinite(na) && Number.isFinite(nb)) return [na, nb]
   return null
 }
 
@@ -386,8 +399,20 @@ function applyOperator(op, value, target) {
     case 'gte':
     case 'lt':
     case 'lte': {
+      // Numbers (or clean numeric strings) compare numerically; two plain
+      // strings compare lexically. Anything else (array/object/boolean, or a
+      // type mismatch) is not orderable → no match, rather than letting JS's
+      // `>=` coerce (e.g. `[] >= 0` is true in raw JS).
       const nums = coerceNum(value, target)
-      const [a, b] = nums || [value, target]
+      let a, b
+      if (nums) {
+        ;[a, b] = nums
+      } else if (typeof value === 'string' && typeof target === 'string') {
+        a = value
+        b = target
+      } else {
+        return false
+      }
       if (op === 'gt') return a > b
       if (op === 'gte') return a >= b
       if (op === 'lt') return a < b
