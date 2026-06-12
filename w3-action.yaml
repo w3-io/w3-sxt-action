@@ -174,3 +174,101 @@ commands:
       result:
         type: array
         description: Latest blocks from the specified chain
+
+  # ---------------------------------------------------------------------------
+  # State entity commands (w3-give Story 1.1). Append-only versioned entities
+  # in <schema-name>.ENTITY_VERSIONS. Auth via the explicit-JWT inputs
+  # (auth-url / auth-secret / biscuit); the runtime biscuit grants dql_select +
+  # dml_insert ONLY, so history cannot be mutated. transaction and the
+  # object-store ops are intentionally absent — they raise NOT_SUPPORTED
+  # (object storage is the cloud: syscall / Storj, Story 1.2). Outputs are a
+  # JSON string on `result`, parsed by callers via
+  # fromJSON(steps.X.outputs.result).<field>; failures set `error-code`.
+  # ---------------------------------------------------------------------------
+  - name: put-entity
+    description: >
+      Append a new version row for an entity (append-only). Reads the current
+      latest, merges the incoming partial fields onto it, enforces optional
+      expected-version CAS, then INSERTs a new monotonic version. A replay
+      appends a NEW version (not a storage no-op).
+    inputs:
+      tenant-id:
+        type: string
+        required: true
+        description: Tenant scope, bound on every write (multi-tenant isolation)
+      entity-type:
+        type: string
+        required: true
+        description: 'Entity type, e.g. Gift | User | Recipient | Asset'
+      id:
+        type: string
+        required: true
+        description: Entity id (unique within tenant + entity-type)
+      fields:
+        type: string
+        required: true
+        description: JSON object — full entity, or a partial patch merged onto the latest
+      expected-version:
+        type: string
+        required: false
+        description: Optimistic-concurrency token; stale → PRECONDITION_FAILED
+    outputs:
+      result:
+        type: object
+        description: '{ entity, version } — the persisted entity and its new version'
+
+  - name: get-entity
+    description: >
+      Read the latest version of an entity by id, tenant-scoped. Not-found is
+      not an error — returns { entity: null }.
+    inputs:
+      tenant-id:
+        type: string
+        required: true
+        description: Tenant scope
+      entity-type:
+        type: string
+        required: true
+        description: Entity type
+      id:
+        type: string
+        required: true
+        description: Entity id
+    outputs:
+      result:
+        type: object
+        description: '{ entity, version } or { entity: null }'
+
+  - name: query-entities
+    description: >
+      PostgREST-style filter/sort/limit over the latest-version view,
+      tenant-scoped. The latest version per id is selected in SQL; filter/sort/
+      limit are applied over the result (SxT has no JSON column functions).
+    inputs:
+      tenant-id:
+        type: string
+        required: true
+        description: Tenant scope
+      entity-type:
+        type: string
+        required: true
+        description: Entity type
+      filter:
+        type: string
+        required: false
+        description: >
+          JSON object of field → operator, e.g.
+          {"status":{"eq":"completed"},"amount":{"gt":100}}. Operators:
+          eq, neq, in, like, contains, gt, gte, lt, lte, is_null.
+      sort:
+        type: string
+        required: false
+        description: 'JSON array of {field, direction}, most-significant first (direction: asc|desc)'
+      limit:
+        type: string
+        required: false
+        description: 'Max rows (default 50, capped at 500)'
+    outputs:
+      result:
+        type: array
+        description: Latest version per id, filtered/sorted/limited
