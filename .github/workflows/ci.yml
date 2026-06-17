@@ -28,7 +28,7 @@ jobs:
           NODE_AUTH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Standards lint
-        run: npx @w3-io/action-lint@latest
+        run: npx -y github:w3-io/action-lint
 
       - name: Format check
         run: npm run format:check
